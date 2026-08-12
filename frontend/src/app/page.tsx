@@ -55,7 +55,7 @@ Sou um assistente especializado em análise de Notas Fiscais de Serviço. Posso 
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const API_BASE = '/api';
+  const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
   const addMessage = (role: 'user' | 'assistant', content: string) => {
     const newMsg: Message = {

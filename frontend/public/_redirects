@@ -1,0 +1,3 @@
+# Redireciona /api/* para o backend
+# Em produção, troque pela URL do seu backend
+/api/*  http://localhost:8000/:splat  200
