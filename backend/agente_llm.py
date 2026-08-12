@@ -1,0 +1,254 @@
+"""Módulo de integração com OpenRouter (LLM)."""
+
+import json
+import re
+from typing import Optional
+import requests
+from config import settings
+
+
+SYSTEM_PROMPT_ANALISE = """Você é um analista fiscal sênior especializado em NFSe e direito tributário brasileiro.
+Analise os dados fornecidos e gere um relatório técnico-jurídico completo em Markdown.
+
+O relatório DEVE conter estas seções obrigatórias:
+
+## 📋 Dados da Empresa
+- Razão social, CNPJ, situação cadastral, CNAE
+
+## 🏢 Enquadramento Fiscal
+- MEI, Simples Nacional, Lucro Presumido/Real
+- Informe se é optante pelo Simples Nacional conforme dados oficiais
+
+## 🛠️ Serviço Prestado
+- Descrição do serviço, código LC 116/2003, CNAE, NBS, CSN (quando disponíveis)
+
+## ⚖️ Legislação Aplicável
+- LC 116/2003 (item específico)
+- Lei Municipal do município informado
+- LC 123/2006 (Simples Nacional)
+- IN RFB 2.100/2022 (retenções federais)
+
+## 🧮 Análise de Retenções
+Analise CADA tributo individualmente:
+- **ISS (municipal):** Verificar regra do município. Se optante Simples Nacional/MEI, verificar dispensa.
+- **IRRF (1.5%):** Não retido para optantes do Simples Nacional (LC 123/2006, art. 13)
+- **CSLL (1%):** Não retido para optantes do Simples Nacional
+- **COFINS (3%):** Não retido para optantes do Simples Nacional
+- **PIS (0,65%):** Não retido para optantes do Simples Nacional
+Indique valores percentuais e base legal de cada um.
+
+## 💬 Opiniões da Comunidade
+Resumo das informações encontradas nas buscas online, citando as fontes (URLs).
+Inclua alerta de que são complementares à legislação oficial.
+
+## ✅ Conclusão
+Análise final consolidada. Seja conservador: se houver divergência entre fontes, priorize a legislação oficial.
+NÃO sugira nenhuma ação concreta (como "recolher" ou "pagar"). Apenas analise.
+
+IMPORTANTE: Formate o relatório em Markdown limpo e bem estruturado.
+"""
+
+SYSTEM_PROMPT_OCR = """Extraia os seguintes dados da NFSe fornecida (imagem/PDF):
+- CNPJ do prestador do serviço
+- Descrição do serviço
+- Valor total da nota
+- Município da prestação
+- Número da NFSe (se visível)
+- Data de emissão (se visível)
+
+Retorne APENAS um JSON válido e nada mais, no formato exato:
+{"cnpj": "...", "servico": "...", "valor": 0.00, "cidade": "...", "uf": "..."}
+
+Se algum campo não estiver visível, use string vazia ou 0.0 para valor.
+"""
+
+SYSTEM_PROMPT_EXTRACAO = """Extraia os seguintes dados do texto do usuário:
+- cnpj: string (apenas números)
+- servico: string (descrição do serviço)
+- valor: number (valor numérico)
+- cidade: string
+- uf: string (sigla de 2 letras)
+
+Retorne APENAS um JSON válido e nada mais, no formato exato:
+{"cnpj": "...", "servico": "...", "valor": 0.00, "cidade": "...", "uf": "..."}
+
+Se algum dado não existir no texto, use string vazia ou 0.0 para valor.
+"""
+
+
+def chamar_llm(
+    mensagens: list[dict],
+    modelo: Optional[str] = None,
+    temperatura: float = 0.3,
+    max_tokens: int = 4096,
+) -> str:
+    """
+    Chama a API do OpenRouter para completar um chat.
+
+    Args:
+        mensagens: Lista de mensagens no formato [{"role": "...", "content": "..."}].
+        modelo: Nome do modelo (usa padrão da config se não informado).
+        temperatura: Criatividade da resposta (0.0 a 1.0).
+        max_tokens: Máximo de tokens na resposta.
+
+    Returns:
+        Texto da resposta do modelo.
+    """
+    if not settings.OPENROUTER_API_KEY:
+        return "Erro: OPENROUTER_API_KEY não configurada."
+
+    url = f"{settings.OPENROUTER_BASE_URL}/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {settings.OPENROUTER_API_KEY}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://github.com/agente-nfse",
+        "X-Title": "Wiserule",
+    }
+
+    payload = {
+        "model": modelo or settings.MODELO_ANALISE,
+        "messages": mensagens,
+        "temperature": temperatura,
+        "max_tokens": max_tokens,
+    }
+
+    try:
+        response = requests.post(url, json=payload, headers=headers, timeout=60)
+        response.raise_for_status()
+        data = response.json()
+
+        if "choices" not in data or not data["choices"]:
+            return f"Erro: resposta inesperada da API - {data}"
+
+        return data["choices"][0]["message"]["content"]
+
+    except requests.exceptions.Timeout:
+        return "Erro: timeout na chamada do OpenRouter."
+    except requests.exceptions.RequestException as e:
+        return f"Erro na chamada OpenRouter: {str(e)}"
+
+
+def gerar_analise(contexto: dict) -> str:
+    """
+    Gera o relatório completo de análise.
+
+    Args:
+        contexto: Dicionário com dados consolidados da análise.
+
+    Returns:
+        Relatório em Markdown.
+    """
+    mensagens = [
+        {"role": "system", "content": SYSTEM_PROMPT_ANALISE},
+        {
+            "role": "user",
+            "content": f"""Analise os dados abaixo e gere o relatório completo:
+
+## Dados da Empresa
+{json.dumps(contexto.get('empresa', {}), indent=2, ensure_ascii=False)}
+
+## Correlação do Serviço
+{contexto.get('correlacao_formatada', 'Não disponível')}
+
+## Valor do Serviço
+R$ {contexto.get('valor', 0):.2f}
+
+## Município
+{contexto.get('cidade', '')}/{contexto.get('uf', '')}
+
+## Resultados de Busca Online
+{contexto.get('busca_formatada', 'Nenhum resultado disponível')}
+""",
+        },
+    ]
+
+    return chamar_llm(mensagens)
+
+
+def extrair_dados_nfse(arquivo_base64: str, extensao: str = "png") -> dict:
+    """
+    Extrai dados de uma NFSe a partir de imagem/PDF usando LLM multimodal.
+
+    Args:
+        arquivo_base64: Conteúdo do arquivo em base64.
+        extensao: Extensão do arquivo (png, jpg, pdf).
+
+    Returns:
+        Dicionário com dados extraídos.
+    """
+    mime_type = {
+        "png": "image/png",
+        "jpg": "image/jpeg",
+        "jpeg": "image/jpeg",
+        "pdf": "application/pdf",
+    }.get(extensao.lower(), "image/png")
+
+    mensagens = [
+        {"role": "system", "content": SYSTEM_PROMPT_OCR},
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "text",
+                    "text": "Extraia os dados desta NFSe e retorne APENAS o JSON.",
+                },
+                {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:{mime_type};base64,{arquivo_base64}"
+                    },
+                },
+            ],
+        },
+    ]
+
+    resposta = chamar_llm(mensagens, modelo=settings.MODELO_VISAO)
+
+    # Tenta extrair JSON da resposta
+    return _extrair_json(resposta)
+
+
+def extrair_dados_texto(texto: str) -> dict:
+    """
+    Extrai dados de NFSe a partir de texto em linguagem natural.
+
+    Args:
+        texto: Texto digitado pelo usuário.
+
+    Returns:
+        Dicionário com dados extraídos.
+    """
+    mensagens = [
+        {"role": "system", "content": SYSTEM_PROMPT_EXTRACAO},
+        {"role": "user", "content": texto},
+    ]
+
+    resposta = chamar_llm(mensagens, modelo=settings.MODELO_OCR, temperatura=0.1)
+
+    return _extrair_json(resposta)
+
+
+def _extrair_json(texto: str) -> dict:
+    """Tenta extrair um JSON válido da resposta do LLM."""
+    # Tenta encontrar bloco JSON delimitado por ```json ... ```
+    padrao = r"```(?:json)?\s*([\s\S]*?)```"
+    match = re.search(padrao, texto)
+    if match:
+        texto = match.group(1).strip()
+
+    # Tenta parsear
+    try:
+        return json.loads(texto)
+    except json.JSONDecodeError:
+        pass
+
+    # Tenta encontrar { ... } no texto
+    padrao_chaves = r"\{[\s\S]*\}"
+    match = re.search(padrao_chaves, texto)
+    if match:
+        try:
+            return json.loads(match.group(0))
+        except json.JSONDecodeError:
+            pass
+
+    return {}
