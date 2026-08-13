@@ -24,10 +24,14 @@ app = FastAPI(
     version="1.0.0",
 )
 
-# CORS - permite o frontend
+# CORS - permite frontend Netlify e desenvolvimento local
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Em produção, restrinja ao domínio do frontend
+    allow_origins=[
+        "https://wiserule.netlify.app",
+        "http://localhost:3000",
+        "http://localhost:8000",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -6,9 +6,9 @@
 [build.environment]
   NODE_VERSION = "20"
 
-# Redireciona /api/* para o backend
-# Troque a URL quando fizer deploy do backend
+# Redireciona /api/* para o backend no Railway
+# 🔴 TROQUE pela URL do Railway depois do deploy
 [[redirects]]
   from = "/api/*"
-  to = "https://backend-wiserule.onrender.com/:splat"
+  to = "https://wiserule-backend.up.railway.app/:splat"
   status = 200
