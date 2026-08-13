@@ -1,10 +1,14 @@
 """Módulo de integração com OpenRouter (LLM)."""
 
 import json
+import logging
 import re
 from typing import Optional
 import requests
 from config import settings
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 SYSTEM_PROMPT_ANALISE = """Você é um analista fiscal sênior especializado em NFSe e direito tributário brasileiro.
@@ -113,11 +117,12 @@ def chamar_llm(
     }
 
     try:
-        print(f"[LLM] URL: {url}", flush=True)
-        print(f"[LLM] Model: {payload['model']}", flush=True)
-        print(f"[LLM] API Key starts: {settings.OPENROUTER_API_KEY[:15]}...", flush=True)
+        logger.info(f"[LLM] URL: {url}")
+        logger.info(f"[LLM] Model: {payload['model']}")
+        logger.info(f"[LLM] API Key prefix: {settings.OPENROUTER_API_KEY[:15]}...")
         response = requests.post(url, json=payload, headers=headers, timeout=60)
-        print(f"[LLM] Status: {response.status_code}", flush=True)
+        logger.info(f"[LLM] Status: {response.status_code}")
+        logger.info(f"[LLM] Response body: {response.text[:500]}")
         response.raise_for_status()
         data = response.json()
 
