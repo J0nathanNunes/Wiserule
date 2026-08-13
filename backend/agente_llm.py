@@ -1,9 +1,12 @@
 """Módulo de integração com OpenRouter (LLM)."""
 
+import base64
 import json
 import logging
 import re
+from io import BytesIO
 from typing import Optional
+from PyPDF2 import PdfReader
 from openai import OpenAI
 from config import settings
 
@@ -227,11 +230,36 @@ def extrair_dados_nfse(arquivo_base64: str, extensao: str = "png") -> dict:
     Returns:
         Dicionário com dados extraídos.
     """
+    import base64
+
+    # Se for PDF, extrai texto diretamente com PyPDF2
+    if extensao.lower() == "pdf":
+        try:
+            arquivo_bytes = base64.b64decode(arquivo_base64)
+            reader = PdfReader(BytesIO(arquivo_bytes))
+            texto_pdf = ""
+            for pagina in reader.pages:
+                texto_pdf += pagina.extract_text() or ""
+            
+            logger.info(f"[OCR] Texto extraído do PDF ({len(texto_pdf)} chars)")
+            
+            # Envia o texto extraído para o LLM extrair os dados
+            mensagens = [
+                {"role": "system", "content": SYSTEM_PROMPT_OCR},
+                {"role": "user", "content": f"Extraia os dados desta NFSe do texto abaixo:\n\n{texto_pdf}"},
+            ]
+            resposta = chamar_llm(mensagens, modelo=settings.MODELO_OCR, temperatura=0.1)
+            logger.info(f"[OCR] Resposta do LLM para PDF: {resposta[:200]}")
+            return _extrair_json(resposta)
+        except Exception as e:
+            logger.error(f"[OCR] Erro ao processar PDF: {e}")
+            return {}
+
+    # Para imagens (png, jpg), usa modelo com visão
     mime_type = {
         "png": "image/png",
         "jpg": "image/jpeg",
         "jpeg": "image/jpeg",
-        "pdf": "application/pdf",
     }.get(extensao.lower(), "image/png")
 
     mensagens = [
@@ -254,9 +282,12 @@ def extrair_dados_nfse(arquivo_base64: str, extensao: str = "png") -> dict:
     ]
 
     resposta = chamar_llm(mensagens, modelo=settings.MODELO_VISAO)
+    logger.info(f"[OCR] Resposta bruta do LLM: {resposta[:300]}")
 
     # Tenta extrair JSON da resposta
-    return _extrair_json(resposta)
+    dados = _extrair_json(resposta)
+    logger.info(f"[OCR] JSON extraído: {dados}")
+    return dados
 
 
 def extrair_dados_texto(texto: str) -> dict:
