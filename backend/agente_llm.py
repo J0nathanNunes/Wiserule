@@ -67,6 +67,8 @@ Indique valores percentuais e base legal de cada um.
 Resumo das informações encontradas nas buscas online, citando as fontes (URLs).
 Inclua alerta de que são complementares à legislação oficial.
 
+IMPORTANTE: Filtre os resultados. Se alguma fonte falar sobre assunto diferente do serviço analisado (ex.: construção civil quando o serviço é organização de eventos), descarte essa fonte e não a mencione.
+
 ## ✅ Conclusão
 Análise final consolidada. Seja conservador: se houver divergência entre fontes, priorize a legislação oficial.
 NÃO sugira nenhuma ação concreta (como "recolher" ou "pagar"). Apenas analise.
@@ -166,7 +168,11 @@ def gerar_analise(contexto: dict) -> str:
 ## Dados da Empresa
 {json.dumps(contexto.get('empresa', {}), indent=2, ensure_ascii=False)}
 
-## Correlação do Serviço
+## CNAE do Serviço
+Código: {contexto.get('cnae_codigo', '')}
+Descrição: {contexto.get('cnae_descricao', '')}
+
+## Correlação do Serviço (LC 116/2003, NBS, CSN)
 {contexto.get('correlacao_formatada', 'Não disponível')}
 
 ## Valor do Serviço

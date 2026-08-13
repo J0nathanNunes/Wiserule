@@ -127,7 +127,8 @@ async def analisar_nfse(
         correlacao_formatada = formatar_correlacao_para_llm(correlacao)
 
         # --- FASE 4: Busca online ---
-        pergunta = f"retenção ISS {servico} {cidade} {uf} legislação discussões"
+        cnae_str = empresa.cnae if hasattr(empresa, 'cnae') and empresa.cnae else servico
+        pergunta = f"{cnae_str} {servico} retenção ISS {cidade} {uf} LC 116 legislação"
         resultados_busca = buscar_online(pergunta)
         busca_formatada = formatar_busca_para_llm(resultados_busca)
 
@@ -135,6 +136,8 @@ async def analisar_nfse(
         contexto = {
             "empresa": empresa.model_dump() if hasattr(empresa, "model_dump") else empresa.__dict__,
             "correlacao_formatada": correlacao_formatada,
+            "cnae_codigo": empresa.cnae if hasattr(empresa, 'cnae') else "",
+            "cnae_descricao": empresa.cnae_descricao if hasattr(empresa, 'cnae_descricao') else "",
             "valor": valor,
             "cidade": cidade,
             "uf": uf,
