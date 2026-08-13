@@ -28,16 +28,27 @@ def consultar_cnpj(cnpj: str) -> EmpresaData:
         return EmpresaData(
             cnpj=cnpj,
             razao_social=data.get("razao_social", ""),
+            nome_fantasia=data.get("nome_fantasia", ""),
             situacao=data.get("descricao_situacao_cadastral", ""),
             cnae=data.get("cnae_fiscal_descricao", ""),
             cnae_descricao=data.get("cnae_fiscal_descricao", ""),
             cnaes_secundarios=data.get("cnaes_secundarios", []),
             natureza_juridica=data.get("natureza_juridica", ""),
             porte=data.get("porte", ""),
+            capital_social=data.get("capital_social", 0.0) or 0.0,
+            data_inicio_atividade=data.get("data_inicio_atividade"),
+            endereco=f"{data.get('logradouro', '')}, {data.get('numero', '')} - {data.get('bairro', '')}".strip(", "),
+            municipio=data.get("municipio", ""),
+            uf=data.get("uf", ""),
+            cep=data.get("cep", ""),
+            telefone=data.get("ddd_telefone_1", ""),
+            email=data.get("email", ""),
+            matriz_filial=data.get("descricao_identificador_matriz_filial", ""),
             simples_nacional=data.get("opcao_pelo_simples", False),
             mei=data.get("opcao_pelo_mei", False),
             data_opcao_simples=data.get("data_opcao_simples"),
             data_exclusao_simples=data.get("data_exclusao_simples"),
+            qsa=data.get("qsa", []),
         )
 
     except requests.exceptions.Timeout:

@@ -19,16 +19,27 @@ class EmpresaData(BaseModel):
     """Dados da empresa retornados pela consulta CNPJ."""
     cnpj: str = ""
     razao_social: str = ""
+    nome_fantasia: str = ""
     situacao: str = ""
     cnae: str = ""
     cnae_descricao: str = ""
     cnaes_secundarios: list = []
     natureza_juridica: str = ""
     porte: str = ""
+    capital_social: float = 0.0
+    data_inicio_atividade: Optional[str] = None
+    endereco: str = ""
+    municipio: str = ""
+    uf: str = ""
+    cep: str = ""
+    telefone: str = ""
+    email: str = ""
+    matriz_filial: str = ""
     simples_nacional: bool = False
     mei: bool = False
     data_opcao_simples: Optional[str] = None
     data_exclusao_simples: Optional[str] = None
+    qsa: list = []
 
 
 class CorrelacaoServico(BaseModel):

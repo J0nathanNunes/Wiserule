@@ -29,8 +29,13 @@ Analise os dados fornecidos e gere um relatório técnico-jurídico completo em 
 O relatório DEVE conter estas seções obrigatórias:
 
 ## 📋 Dados da Empresa
-- Razão social, CNPJ, situação cadastral, CNAE principal
-- CNAEs secundários cadastrados na Receita Federal (se houver)
+- Razão social, nome fantasia, CNPJ, situação cadastral
+- Endereço completo, município, UF, CEP
+- Telefone e e-mail (se disponíveis)
+- Natureza jurídica, porte, capital social
+- Data de início de atividade, matriz/filial
+- CNAE principal e CNAEs secundários cadastrados na Receita Federal
+- Quadro de sócios (QSA), se disponível
 
 ## 🏢 Enquadramento Fiscal
 - MEI, Simples Nacional, Lucro Presumido/Real
@@ -163,6 +168,21 @@ def _formatar_cnaes_secundarios(cnaes: list) -> str:
     return "\n".join(linhas)
 
 
+def _formatar_qsa(qsa: list) -> str:
+    """Formata o quadro de sócios para o prompt."""
+    if not qsa:
+        return "Nenhum sócio cadastrado."
+    
+    linhas = []
+    for s in qsa:
+        nome = s.get("nome_socio", "")
+        qualificacao = s.get("qualificacao_socio", "")
+        faixa_etaria = s.get("faixa_etaria", "")
+        if nome:
+            linhas.append(f"- {nome} ({qualificacao})")
+    return "\n".join(linhas) if linhas else "Nenhum sócio cadastrado."
+
+
 def gerar_analise(contexto: dict) -> str:
     """
     Gera o relatório completo de análise.
@@ -188,6 +208,9 @@ Descrição: {contexto.get('cnae_descricao', '')}
 
 ## CNAEs Secundários (Receita Federal)
 {_formatar_cnaes_secundarios(contexto.get('cnaes_secundarios', []))}
+
+## Quadro de Sócios (QSA)
+{_formatar_qsa(contexto.get('empresa', {}).get('qsa', []) if isinstance(contexto.get('empresa'), dict) else [])}
 
 ## Correlação do Serviço (LC 116/2003, NBS, CSN)
 {contexto.get('correlacao_formatada', 'Não disponível')}
