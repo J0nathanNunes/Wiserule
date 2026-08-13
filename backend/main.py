@@ -89,15 +89,17 @@ async def analisar_nfse(
             arquivo_base64 = base64.b64encode(conteudo).decode()
 
             dados_extraidos = extrair_dados_nfse(arquivo_base64, extensao)
+            print(f"[OCR] Dados extraídos: {dados_extraidos}")
 
         # 1b: Se tem mensagem em texto, extrai via LLM
         if mensagem and not any([cnpj, servico, valor, cidade]):
             dados_extraidos = extrair_dados_texto(mensagem)
+            print(f"[TEXTO] Dados extraídos: {dados_extraidos}")
 
         # 1c: Mescla dados (manual sobrescreve extraído)
         cnpj = cnpj or dados_extraidos.get("cnpj", "")
         servico = servico or dados_extraidos.get("servico", "")
-        valor = valor or dados_extraidos.get("valor", 0.0) or 0.0
+        valor = float(valor) if valor else float(dados_extraidos.get("valor", 0.0) or 0.0)
         cidade = cidade or dados_extraidos.get("cidade", "")
         uf = uf or dados_extraidos.get("uf", "MS")
 
