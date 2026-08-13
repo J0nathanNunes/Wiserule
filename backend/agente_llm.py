@@ -45,12 +45,22 @@ O relatório DEVE conter estas seções obrigatórias:
 - IN RFB 2.100/2022 (retenções federais)
 
 ## 🧮 Análise de Retenções
-Analise CADA tributo individualmente:
-- **ISS (municipal):** Verificar regra do município. Se optante Simples Nacional/MEI, verificar dispensa.
-- **IRRF (1.5%):** Não retido para optantes do Simples Nacional (LC 123/2006, art. 13)
-- **CSLL (1%):** Não retido para optantes do Simples Nacional
-- **COFINS (3%):** Não retido para optantes do Simples Nacional
-- **PIS (0,65%):** Não retido para optantes do Simples Nacional
+Analise CADA tributo individualmente com base no enquadramento:
+
+**Se a empresa for optante do Simples Nacional ou MEI:**
+- **ISS (municipal):** Verificar regra do município (geralmente dispensa de retenção)
+- **IRRF (1.5%):** Não retido (LC 123/2006, art. 13)
+- **CSLL (1%):** Não retido (LC 123/2006, art. 13)
+- **COFINS (3%):** Não retido (LC 123/2006, art. 13)
+- **PIS (0,65%):** Não retido (LC 123/2006, art. 13)
+
+**Se a empresa NÃO for optante do Simples Nacional (Lucro Presumido/Real):**
+- **ISS (municipal):** Verificar regra do município (retenção na fonte é obrigatória)
+- **IRRF (1.5%):** Deve ser retido (IN RFB 2.100/2022)
+- **CSLL (1%):** Deve ser retido (IN RFB 2.100/2022)
+- **COFINS (3%):** Deve ser retido (IN RFB 2.100/2022)
+- **PIS (0,65%):** Deve ser retido (IN RFB 2.100/2022)
+
 Indique valores percentuais e base legal de cada um.
 
 ## 💬 Opiniões da Comunidade
