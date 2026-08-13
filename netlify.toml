@@ -6,6 +6,9 @@
 [build.environment]
   NODE_VERSION = "20"
 
+[context.production.environment]
+  NEXT_PUBLIC_API_URL = "https://wiserule-production.up.railway.app"
+
 # Redireciona /api/* para o backend no Railway
 [[redirects]]
   from = "/api/*"
