@@ -113,7 +113,11 @@ def chamar_llm(
     }
 
     try:
+        print(f"[LLM] URL: {url}")
+        print(f"[LLM] Model: {payload['model']}")
         response = requests.post(url, json=payload, headers=headers, timeout=60)
+        print(f"[LLM] Status: {response.status_code}")
+        print(f"[LLM] Response: {response.text[:300]}")
         response.raise_for_status()
         data = response.json()
 
