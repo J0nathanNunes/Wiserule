@@ -43,6 +43,7 @@ O relatório DEVE conter estas seções obrigatórias:
 ## 🏢 Enquadramento Fiscal
 - MEI, Simples Nacional, Lucro Presumido/Real
 - Informe se é optante pelo Simples Nacional conforme dados oficiais
+- Datas de opção e exclusão do MEI/Simples (se houver exclusão, mostrar a data; se não houver, usar "-")
 
 ## 🛠️ Serviço Prestado
 - Descrição do serviço, código LC 116/2003, CNAE, NBS, CSN (quando disponíveis)
@@ -187,6 +188,13 @@ def gerar_analise(contexto: dict) -> str:
     Returns:
         Relatório em Markdown.
     """
+    # Trata None para exibição
+    empresa = contexto.get('empresa', {})
+    if isinstance(empresa, dict):
+        for campo in ['data_exclusao_simples', 'data_exclusao_mei', 'telefone', 'email']:
+            if campo in empresa and empresa[campo] is None:
+                empresa[campo] = '-'
+
     mensagens = [
         {"role": "system", "content": SYSTEM_PROMPT_ANALISE},
         {
@@ -194,7 +202,7 @@ def gerar_analise(contexto: dict) -> str:
             "content": f"""Analise os dados abaixo e gere o relatório completo:
 
 ## Dados da Empresa
-{json.dumps(contexto.get('empresa', {}), indent=2, ensure_ascii=False)}
+{json.dumps(empresa, indent=2, ensure_ascii=False)}
 
 ## CNAE do Serviço
 Código: {contexto.get('cnae_codigo', '')}
