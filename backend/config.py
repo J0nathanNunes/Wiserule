@@ -34,9 +34,9 @@ class Settings:
     MINHA_RECEITA_URL: str = "https://minhareceita.org"
 
     # Modelos LLM
-    MODELO_OCR: str = "deepseek/deepseek-v4-flash-0731"
-    MODELO_ANALISE: str = "deepseek/deepseek-v4-flash-0731"
-    MODELO_VISAO: str = "google/gemini-2.0-flash-exp:free"
+    MODELO_OCR: str = "openai/gpt-4o-mini"
+    MODELO_ANALISE: str = "openai/gpt-4o-mini"
+    MODELO_VISAO: str = "openai/gpt-4o-mini"
 
     # Limites
     MAX_FILE_SIZE_MB: int = 5
