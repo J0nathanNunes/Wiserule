@@ -34,9 +34,9 @@ class Settings:
     MINHA_RECEITA_URL: str = "https://minhareceita.org"
 
     # Modelos LLM
-    MODELO_OCR: str = "anthropic/claude-3.5-haiku"
-    MODELO_ANALISE: str = "anthropic/claude-3.5-sonnet"
-    MODELO_VISAO: str = "openai/gpt-4o"
+    MODELO_OCR: str = "meta-llama/llama-3.1-8b-instruct:free"
+    MODELO_ANALISE: str = "meta-llama/llama-3.1-8b-instruct:free"
+    MODELO_VISAO: str = "google/gemini-2.0-flash-exp:free"
 
     # Limites
     MAX_FILE_SIZE_MB: int = 5
