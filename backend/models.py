@@ -32,8 +32,8 @@ class EmpresaData(BaseModel):
     municipio: str = ""
     uf: str = ""
     cep: str = ""
-    telefone: str = ""
-    email: str = ""
+    telefone: Optional[str] = None
+    email: Optional[str] = None
     matriz_filial: str = ""
     simples_nacional: bool = False
     mei: bool = False
