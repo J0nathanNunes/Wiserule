@@ -46,8 +46,10 @@ def consultar_cnpj(cnpj: str) -> EmpresaData:
             matriz_filial=data.get("descricao_identificador_matriz_filial", ""),
             simples_nacional=data.get("opcao_pelo_simples", False),
             mei=data.get("opcao_pelo_mei", False),
-            data_opcao_simples=data.get("data_opcao_simples"),
-            data_exclusao_simples=data.get("data_exclusao_simples"),
+            data_opcao_simples=data.get("data_opcao_pelo_simples"),
+            data_exclusao_simples=data.get("data_exclusao_do_simples"),
+            data_opcao_mei=data.get("data_opcao_pelo_mei"),
+            data_exclusao_mei=data.get("data_exclusao_do_mei"),
             qsa=data.get("qsa", []),
         )
 

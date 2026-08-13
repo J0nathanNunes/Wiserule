@@ -39,6 +39,8 @@ class EmpresaData(BaseModel):
     mei: bool = False
     data_opcao_simples: Optional[str] = None
     data_exclusao_simples: Optional[str] = None
+    data_opcao_mei: Optional[str] = None
+    data_exclusao_mei: Optional[str] = None
     qsa: list = []
 
 
