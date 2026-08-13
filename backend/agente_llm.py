@@ -4,11 +4,23 @@ import json
 import logging
 import re
 from typing import Optional
-import requests
+from openai import OpenAI
 from config import settings
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+def get_openai_client() -> OpenAI:
+    """Retorna cliente OpenAI configurado para OpenRouter."""
+    return OpenAI(
+        base_url=settings.OPENROUTER_BASE_URL,
+        api_key=settings.OPENROUTER_API_KEY,
+        default_headers={
+            "HTTP-Referer": "https://github.com/agente-nfse",
+            "X-Title": "Wiserule",
+        },
+    )
 
 
 SYSTEM_PROMPT_ANALISE = """Você é um analista fiscal sênior especializado em NFSe e direito tributário brasileiro.
@@ -87,7 +99,7 @@ def chamar_llm(
     max_tokens: int = 4096,
 ) -> str:
     """
-    Chama a API do OpenRouter para completar um chat.
+    Chama a API do OpenRouter para completar um chat usando a biblioteca openai.
 
     Args:
         mensagens: Lista de mensagens no formato [{"role": "...", "content": "..."}].
@@ -101,39 +113,27 @@ def chamar_llm(
     if not settings.OPENROUTER_API_KEY:
         return "Erro: OPENROUTER_API_KEY não configurada."
 
-    url = f"{settings.OPENROUTER_BASE_URL}/chat/completions"
-    headers = {
-        "Authorization": f"Bearer {settings.OPENROUTER_API_KEY}",
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://github.com/agente-nfse",
-        "X-Title": "Wiserule",
-    }
-
-    payload = {
-        "model": modelo or settings.MODELO_ANALISE,
-        "messages": mensagens,
-        "temperature": temperatura,
-        "max_tokens": max_tokens,
-    }
-
     try:
-        logger.info(f"[LLM] URL: {url}")
-        logger.info(f"[LLM] Model: {payload['model']}")
-        logger.info(f"[LLM] API Key prefix: {settings.OPENROUTER_API_KEY[:15]}...")
-        response = requests.post(url, json=payload, headers=headers, timeout=60)
-        logger.info(f"[LLM] Status: {response.status_code}")
-        logger.info(f"[LLM] Response body: {response.text[:500]}")
-        response.raise_for_status()
-        data = response.json()
+        client = get_openai_client()
+        model = modelo or settings.MODELO_ANALISE
 
-        if "choices" not in data or not data["choices"]:
-            return f"Erro: resposta inesperada da API - {data}"
+        logger.info(f"[LLM] Model: {model}")
+        logger.info(f"[LLM] Base URL: {settings.OPENROUTER_BASE_URL}")
 
-        return data["choices"][0]["message"]["content"]
+        response = client.chat.completions.create(
+            model=model,
+            messages=mensagens,
+            temperature=temperatura,
+            max_tokens=max_tokens,
+        )
 
-    except requests.exceptions.Timeout:
-        return "Erro: timeout na chamada do OpenRouter."
-    except requests.exceptions.RequestException as e:
+        if not response.choices:
+            return "Erro: resposta vazia do OpenRouter."
+
+        return response.choices[0].message.content or ""
+
+    except Exception as e:
+        logger.error(f"[LLM] Erro: {str(e)}")
         return f"Erro na chamada OpenRouter: {str(e)}"
 
 
