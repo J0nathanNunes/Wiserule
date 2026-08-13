@@ -34,8 +34,8 @@ class Settings:
     MINHA_RECEITA_URL: str = "https://minhareceita.org"
 
     # Modelos LLM
-    MODELO_OCR: str = "meta-llama/llama-3.1-8b-instruct:free"
-    MODELO_ANALISE: str = "meta-llama/llama-3.1-8b-instruct:free"
+    MODELO_OCR: str = "deepseek/deepseek-v4-flash-0731"
+    MODELO_ANALISE: str = "deepseek/deepseek-v4-flash-0731"
     MODELO_VISAO: str = "google/gemini-2.0-flash-exp:free"
 
     # Limites
