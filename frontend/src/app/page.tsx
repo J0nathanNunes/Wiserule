@@ -110,6 +110,40 @@ Sou um assistente especializado em análise de Notas Fiscais de Serviço. Posso 
   };
 
   const enviarMensagem = async (texto: string, arquivo?: File | null) => {
+    // Se tem arquivo mas não tem texto, envia só o arquivo
+    if (arquivo && !texto.trim()) {
+      addMessage('user', `📎 **Arquivo anexado:** \`${arquivo.name}\``);
+      setIsLoading(true);
+
+      const formPayload = new FormData();
+      formPayload.append('arquivo', arquivo);
+
+      try {
+        const response = await fetch(`${API_BASE}/analisar`, {
+          method: 'POST',
+          body: formPayload,
+        });
+
+        if (!response.ok) throw new Error(`Erro HTTP ${response.status}`);
+
+        const data = await response.json();
+
+        if (data.status === 'erro') {
+          addMessage('assistant', `❌ **Erro na análise:** ${data.erro}`);
+        } else {
+          addMessage('assistant', data.resumo);
+        }
+      } catch (error: any) {
+        addMessage(
+          'assistant',
+          `❌ **Erro de conexão:** Não foi possível conectar ao servidor.\n\n${error.message}`
+        );
+      } finally {
+        setIsLoading(false);
+      }
+      return;
+    }
+
     // Adiciona mensagem do usuário
     let mensagemUsuario = texto;
 

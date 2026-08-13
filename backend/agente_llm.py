@@ -80,18 +80,24 @@ NÃO sugira nenhuma ação concreta (como "recolher" ou "pagar"). Apenas analise
 IMPORTANTE: Formate o relatório em Markdown limpo e bem estruturado.
 """
 
-SYSTEM_PROMPT_OCR = """Extraia os seguintes dados da NFSe fornecida (imagem/PDF):
-- CNPJ do prestador do serviço
-- Descrição do serviço
-- Valor total da nota
-- Município da prestação
+SYSTEM_PROMPT_OCR = """Você é um especialista em leitura de Notas Fiscais de Serviço eletrônicas (NFSe) brasileiras.
+
+Extraia os seguintes dados da NFSe fornecida (imagem/PDF):
+- CNPJ do prestador do serviço (formato XX.XXX.XXX/XXXX-XX ou apenas números)
+- Descrição do serviço (o texto que descreve o que foi prestado)
+- Valor total da nota (valor numérico, sem R$)
+- Município da prestação (cidade onde o serviço foi prestado)
+- UF (sigla do estado, ex: MS, SP, RJ)
 - Número da NFSe (se visível)
 - Data de emissão (se visível)
+
+Procure por campos como "Prestador", "CNPJ", "Valor Total", "Município", "Descrição" na nota.
 
 Retorne APENAS um JSON válido e nada mais, no formato exato:
 {"cnpj": "...", "servico": "...", "valor": 0.00, "cidade": "...", "uf": "..."}
 
 Se algum campo não estiver visível, use string vazia ou 0.0 para valor.
+NÃO invente dados. Se não encontrar, deixe vazio.
 """
 
 SYSTEM_PROMPT_EXTRACAO = """Extraia os seguintes dados do texto do usuário:

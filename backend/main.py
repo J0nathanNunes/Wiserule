@@ -75,7 +75,7 @@ async def analisar_nfse(
         # --- FASE 1: Extrair dados ---
         dados_extraidos = {}
 
-        # 1a: Se tem arquivo, faz OCR
+        # 1a: Se tem arquivo, faz OCR (SEMPRE, independente de mensagem)
         if arquivo and arquivo.filename:
             conteudo = await arquivo.read()
 
@@ -92,12 +92,12 @@ async def analisar_nfse(
             dados_extraidos = extrair_dados_nfse(arquivo_base64, extensao)
             print(f"[OCR] Dados extraídos: {dados_extraidos}")
 
-        # 1b: Se tem mensagem em texto, extrai via LLM
-        if mensagem and not any([cnpj, servico, valor, cidade]):
+        # 1b: Se tem mensagem em texto (sem arquivo), extrai via LLM
+        elif mensagem and not any([cnpj, servico, valor, cidade]):
             dados_extraidos = extrair_dados_texto(mensagem)
             print(f"[TEXTO] Dados extraídos: {dados_extraidos}")
 
-        # 1c: Mescla dados (manual sobrescreve extraído)
+        # 1c: Mescla dados (manual/chat sobrescreve extraído do OCR)
         cnpj = cnpj or dados_extraidos.get("cnpj", "")
         servico = servico or dados_extraidos.get("servico", "")
         valor = float(valor) if valor else float(dados_extraidos.get("valor", 0.0) or 0.0)
