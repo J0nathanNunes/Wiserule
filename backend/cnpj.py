@@ -22,16 +22,16 @@ def consultar_cnpj(cnpj: str) -> EmpresaData:
         response.raise_for_status()
         data = response.json()
 
-        if not data or data.get("codigo_situacao") is None:
+        if not data or not data.get("cnpj"):
             return EmpresaData(cnpj=cnpj)
 
         return EmpresaData(
             cnpj=cnpj,
             razao_social=data.get("razao_social", ""),
-            situacao=data.get("situacao_cadastral", ""),
+            situacao=data.get("descricao_situacao_cadastral", ""),
             cnae=data.get("cnae_fiscal_descricao", ""),
             cnae_descricao=data.get("cnae_fiscal_descricao", ""),
-            natureza_juridica=str(data.get("natureza_juridica", "")),
+            natureza_juridica=data.get("natureza_juridica", ""),
             porte=data.get("porte", ""),
             simples_nacional=data.get("opcao_pelo_simples", False),
             mei=data.get("opcao_pelo_mei", False),
