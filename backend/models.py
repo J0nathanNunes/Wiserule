@@ -22,6 +22,7 @@ class EmpresaData(BaseModel):
     situacao: str = ""
     cnae: str = ""
     cnae_descricao: str = ""
+    cnaes_secundarios: list = []
     natureza_juridica: str = ""
     porte: str = ""
     simples_nacional: bool = False

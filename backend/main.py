@@ -138,6 +138,7 @@ async def analisar_nfse(
             "correlacao_formatada": correlacao_formatada,
             "cnae_codigo": empresa.cnae if hasattr(empresa, 'cnae') else "",
             "cnae_descricao": empresa.cnae_descricao if hasattr(empresa, 'cnae_descricao') else "",
+            "cnaes_secundarios": empresa.cnaes_secundarios if hasattr(empresa, 'cnaes_secundarios') else [],
             "valor": valor,
             "cidade": cidade,
             "uf": uf,

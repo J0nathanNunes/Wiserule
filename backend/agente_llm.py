@@ -29,7 +29,8 @@ Analise os dados fornecidos e gere um relatório técnico-jurídico completo em 
 O relatório DEVE conter estas seções obrigatórias:
 
 ## 📋 Dados da Empresa
-- Razão social, CNPJ, situação cadastral, CNAE
+- Razão social, CNPJ, situação cadastral, CNAE principal
+- CNAEs secundários cadastrados na Receita Federal (se houver)
 
 ## 🏢 Enquadramento Fiscal
 - MEI, Simples Nacional, Lucro Presumido/Real
@@ -149,6 +150,19 @@ def chamar_llm(
         return f"Erro na chamada OpenRouter: {str(e)}"
 
 
+def _formatar_cnaes_secundarios(cnaes: list) -> str:
+    """Formata a lista de CNAEs secundários para o prompt."""
+    if not cnaes:
+        return "Nenhum CNAE secundário cadastrado."
+    
+    linhas = []
+    for c in cnaes:
+        codigo = c.get("codigo", "")
+        descricao = c.get("descricao", "")
+        linhas.append(f"- {codigo}: {descricao}")
+    return "\n".join(linhas)
+
+
 def gerar_analise(contexto: dict) -> str:
     """
     Gera o relatório completo de análise.
@@ -171,6 +185,9 @@ def gerar_analise(contexto: dict) -> str:
 ## CNAE do Serviço
 Código: {contexto.get('cnae_codigo', '')}
 Descrição: {contexto.get('cnae_descricao', '')}
+
+## CNAEs Secundários (Receita Federal)
+{_formatar_cnaes_secundarios(contexto.get('cnaes_secundarios', []))}
 
 ## Correlação do Serviço (LC 116/2003, NBS, CSN)
 {contexto.get('correlacao_formatada', 'Não disponível')}

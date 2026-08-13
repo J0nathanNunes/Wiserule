@@ -31,6 +31,7 @@ def consultar_cnpj(cnpj: str) -> EmpresaData:
             situacao=data.get("descricao_situacao_cadastral", ""),
             cnae=data.get("cnae_fiscal_descricao", ""),
             cnae_descricao=data.get("cnae_fiscal_descricao", ""),
+            cnaes_secundarios=data.get("cnaes_secundarios", []),
             natureza_juridica=data.get("natureza_juridica", ""),
             porte=data.get("porte", ""),
             simples_nacional=data.get("opcao_pelo_simples", False),
