@@ -29,6 +29,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "https://wiserule.netlify.app",
+        "https://*.netlify.app",
         "http://localhost:3000",
         "http://localhost:8000",
     ],
