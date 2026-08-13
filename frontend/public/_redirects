@@ -1,3 +1,2 @@
 # Redireciona /api/* para o backend no Railway
-# 🔴 TROQUE pela URL do Railway depois do deploy
-/api/*  https://wiserule-backend.up.railway.app/:splat  200
+/api/*  https://wiserule-production.up.railway.app/:splat  200
