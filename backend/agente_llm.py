@@ -23,6 +23,8 @@ def get_openai_client() -> OpenAI:
             "HTTP-Referer": "https://github.com/agente-nfse",
             "X-Title": "Wiserule",
         },
+        timeout=45.0,
+        max_retries=1,
     )
 
 
@@ -121,7 +123,7 @@ def chamar_llm(
     mensagens: list[dict],
     modelo: Optional[str] = None,
     temperatura: float = 0.3,
-    max_tokens: int = 4096,
+    max_tokens: int = 2048,
 ) -> str:
     """
     Chama a API do OpenRouter para completar um chat usando a biblioteca openai.

@@ -1,5 +1,6 @@
 """API principal do Wiserule - FastAPI."""
 
+import asyncio
 import base64
 from typing import Optional
 
@@ -115,22 +116,31 @@ async def analisar_nfse(
         # Limpa CNPJ (apenas números)
         cnpj = "".join(filter(str.isdigit, cnpj))
 
-        # --- FASE 2: Consultar CNPJ ---
-        empresa = consultar_cnpj(cnpj)
+        # --- FASES 2, 3 e 4: Rodar em paralelo ---
+        async def consultar_cnpj_async():
+            empresa = consultar_cnpj(cnpj)
+            if not empresa.razao_social and empresa.situacao.startswith("Erro"):
+                empresa = consultar_cnpj_fallback(cnpj)
+            return empresa
 
-        # Se falhou, tenta fallback
-        if not empresa.razao_social and empresa.situacao.startswith("Erro"):
-            empresa = consultar_cnpj_fallback(cnpj)
+        async def correlacionar_async():
+            correlacao = correlacionar_servico(servico, cidade, uf)
+            return formatar_correlacao_para_llm(correlacao)
 
-        # --- FASE 3: Correlacionar serviço ---
-        correlacao = correlacionar_servico(servico, cidade, uf)
-        correlacao_formatada = formatar_correlacao_para_llm(correlacao)
+        async def buscar_online_async(cnae_str: str):
+            pergunta = f"{cnae_str} {servico} retenção ISS {cidade} {uf} LC 116 legislação"
+            resultados = buscar_online(pergunta)
+            return formatar_busca_para_llm(resultados)
 
-        # --- FASE 4: Busca online ---
+        # Executa em paralelo
+        empresa_task = asyncio.create_task(consultar_cnpj_async())
+        correlacao_task = asyncio.create_task(correlacionar_async())
+
+        empresa = await empresa_task
+        correlacao_formatada = await correlacao_task
+
         cnae_str = empresa.cnae if hasattr(empresa, 'cnae') and empresa.cnae else servico
-        pergunta = f"{cnae_str} {servico} retenção ISS {cidade} {uf} LC 116 legislação"
-        resultados_busca = buscar_online(pergunta)
-        busca_formatada = formatar_busca_para_llm(resultados_busca)
+        busca_formatada = await buscar_online_async(cnae_str)
 
         # --- FASE 5: Gerar relatório ---
         contexto = {
