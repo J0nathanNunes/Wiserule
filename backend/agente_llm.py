@@ -41,9 +41,10 @@ O relatório DEVE conter estas seções obrigatórias:
 - CNAE principal e CNAEs secundários cadastrados na Receita Federal
 
 ## 🏢 Enquadramento Fiscal
-- MEI, Simples Nacional, Lucro Presumido/Real
-- Informe se é optante pelo Simples Nacional conforme dados oficiais
-- Datas de opção e exclusão do MEI/Simples (se houver exclusão, mostrar a data; se não houver, usar "-")
+- Optante Simples Nacional: Sim/Não (e data de opção)
+- MEI: Sim/Não (e data de opção)
+- Datas de exclusão do Simples/MEI (se existirem, senão usar "-")
+- Use os campos: data_opcao_simples, data_exclusao_simples, data_opcao_mei, data_exclusao_mei dos dados da empresa
 
 ## 🛠️ Serviço Prestado
 - Descrição do serviço, código LC 116/2003, CNAE, NBS, CSN (quando disponíveis)
