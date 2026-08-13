@@ -113,11 +113,11 @@ def chamar_llm(
     }
 
     try:
-        print(f"[LLM] URL: {url}")
-        print(f"[LLM] Model: {payload['model']}")
+        print(f"[LLM] URL: {url}", flush=True)
+        print(f"[LLM] Model: {payload['model']}", flush=True)
+        print(f"[LLM] API Key starts: {settings.OPENROUTER_API_KEY[:15]}...", flush=True)
         response = requests.post(url, json=payload, headers=headers, timeout=60)
-        print(f"[LLM] Status: {response.status_code}")
-        print(f"[LLM] Response: {response.text[:300]}")
+        print(f"[LLM] Status: {response.status_code}", flush=True)
         response.raise_for_status()
         data = response.json()
 
