@@ -41,11 +41,14 @@ O relatório DEVE conter estas seções obrigatórias:
 - CNAE principal e CNAEs secundários cadastrados na Receita Federal
 
 ## 🏢 Enquadramento Fiscal
-- Optante Simples Nacional: Sim/Não/Não informado (use os campos simples_nacional e data_opcao_simples)
-- MEI: Sim/Não/Não informado (use os campos mei e data_opcao_mei)
-- Se simples_nacional for false ou null, considere como "Não" e mostre "-" para data
-- Se mei for false ou null, considere como "Não" e mostre "-" para data
-- Datas de exclusão do Simples/MEI: se existirem mostre a data, senão use "-"
+- **Simples Nacional:** Sim/Não/Não informado
+  - Data de opção: (data_opcao_simples ou "-")
+  - Data de exclusão: (data_exclusao_simples ou "-")
+- **MEI:** Sim/Não/Não informado
+  - Data de opção: (data_opcao_mei ou "-")
+  - Data de exclusão: (data_exclusao_mei ou "-")
+- Se simples_nacional for false ou null, considere como "Não" e mostre "-" para datas
+- Se mei for false ou null, considere como "Não" e mostre "-" para datas
 
 ## 🛠️ Serviço Prestado
 - Descrição do serviço, código LC 116/2003, CNAE, NBS, CSN (quando disponíveis)
@@ -75,22 +78,14 @@ Analise CADA tributo individualmente com base no enquadramento:
 
 Indique valores percentuais e base legal de cada um.
 
-## 🏛️ Reforma Tributária - IBS e CBS
-Analise o impacto da reforma tributária (EC 132/2023) no serviço analisado:
-- **IBS** (Imposto sobre Bens e Serviços): substituirá ISS e ICMS (transição 2026-2033)
-- **CBS** (Contribuição sobre Bens e Serviços): substituirá PIS e COFINS
-- Use os dados fornecidos de cClassTrib/CST quando disponíveis
-- Explique o que muda para este tipo de serviço na nova sistemática
-- Base legal: EC 132/2023, PLP 68/2024
-Se os dados da API não estiverem disponíveis, explique o cenário geral de transição com base no seu conhecimento (atualizado até 2025/2026).
-
 ## 💬 Opiniões da Comunidade
-Resumo das informações encontradas em sites e fóruns contábeis/tributários confiáveis, citando as fontes (URLs).
+Resumo das informações encontradas em sites e fóruns contábeis/tributários confiáveis.
 Considere APENAS fontes de domínios confiáveis como: gov.br, portaltributario.com.br, contabeis.com.br, conjur.com.br, cfc.org.br, CRC, Sescon, e outros portais técnicos.
 Ignore redes sociais, blogs pessoais, Wikipédia e sites não especializados.
 Inclua alerta de que são complementares à legislação oficial.
 
 IMPORTANTE: Filtre os resultados. Se alguma fonte falar sobre assunto diferente do serviço analisado (ex.: construção civil quando o serviço é organização de eventos), descarte essa fonte e não a mencione.
+NÃO liste as URLs das fontes consultadas no relatório. Use as informações apenas para embasar a análise.
 
 ## ✅ Conclusão
 Análise final consolidada. Seja conservador: se houver divergência entre fontes, priorize a legislação oficial.
@@ -230,9 +225,6 @@ Descrição: {contexto.get('cnae_descricao', '')}
 
 ## Correlação do Serviço (LC 116/2003, NBS, CSN)
 {contexto.get('correlacao_formatada', 'Não disponível')}
-
-## Reforma Tributária - IBS/CBS
-{contexto.get('info_ibs_cbs', 'Dados IBS/CBS indisponíveis.')}
 
 ## Valor do Serviço
 R$ {contexto.get('valor', 0):.2f}

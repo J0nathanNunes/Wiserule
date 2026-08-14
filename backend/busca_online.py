@@ -213,17 +213,14 @@ def _extrair_conteudo_pagina(url: str) -> str:
 
 
 def formatar_busca_para_llm(resultados: list[ResultadoBusca]) -> str:
-    """Formata os resultados de busca para incluir no prompt do LLM."""
+    """Formata os resultados de busca para incluir no prompt do LLM (sem URLs)."""
     if not resultados:
         return "Nenhum resultado encontrado."
 
     partes = []
     for i, r in enumerate(resultados, 1):
-        confiavel = "✅" if _dominio_confiavel(r.url) else "⚠️"
-        partes.append(f"Fonte {i} {confiavel}: {r.title}")
-        partes.append(f"URL: {r.url}")
+        partes.append(f"Fonte {i}: {r.title}")
         if r.content:
-            # Limita o conteúdo exibido
             conteudo = r.content[:500] + "..." if len(r.content) > 500 else r.content
             partes.append(f"Conteúdo: {conteudo}")
         partes.append("")
