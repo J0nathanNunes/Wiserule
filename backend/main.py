@@ -121,15 +121,7 @@ async def analisar_nfse(
             return emp
 
         async def correlacionar_async():
-            # Tenta LegisWeb primeiro (se configurado)
-            if settings.LEGISWEB_TOKEN and settings.LEGISWEB_CODIGO_CLIENTE:
-                from legisweb import correlacionar_servico as leg_corr
-                from legisweb import formatar_correlacao_para_llm as leg_fmt
-                corr = leg_corr(servico, cidade, uf)
-                resultado = leg_fmt(corr)
-                if resultado and "Correlação não encontrada" not in resultado:
-                    return resultado
-            # Fallback: correlação interna gratuita
+            # Usa nossa correlação interna (Supabase + fallback tabela interna)
             cnae_empresa = ""
             try:
                 emp = consultar_cnpj(cnpj)

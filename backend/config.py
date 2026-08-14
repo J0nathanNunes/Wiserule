@@ -29,6 +29,7 @@ class Settings:
     SUPABASE_URL: str = os.getenv("SUPABASE_URL", "")
     SUPABASE_KEY: str = os.getenv("SUPABASE_KEY", "")
     SUPABASE_TABLE_ANALISES: str = os.getenv("SUPABASE_TABLE_ANALISES", "analises")
+    SUPABASE_TABLE_CORRELACAO: str = os.getenv("SUPABASE_TABLE_CORRELACAO", "v_correlacao_completa")
 
     # MinhaReceita
     MINHA_RECEITA_URL: str = "https://minhareceita.org"

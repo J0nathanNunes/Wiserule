@@ -1,19 +1,20 @@
-"""Módulo de substituição para LegisWeb usando tabelas públicas.
+"""Módulo de correlação Wiserule entre serviços, LC 116/2003, NBS e CNAE.
 
-Fontes gratuitas:
-- IBGE/Concla: NBS (Nomenclatura Brasileira de Serviços) - correlação CNAE
-- Tabela interna: CNAE → LC 116/2003 (baseada em dados públicos consolidados)
-- CNAE → CNAE Fiscal da Receita Federal (já consultado via MinhaReceita)
+Fontes:
+- Supabase: tabela v_correlacao_completa (nosso próprio banco)
+- Fallback: tabela interna CNAE_LC116_MAP (dados públicos consolidados)
+- IBGE/Concla: NBS (Nomenclatura Brasileira de Serviços)
+
+Estrutura no Supabase:
+  lc116_itens → código e descrição da LC 116
+  nbs → código e descrição NBS
+  correlacao_cnae_lc116 → CNAE → LC 116 + NBS
+  csn → preparado para futuro (CSN)
+  v_correlacao_completa → view consolidada
 """
 
-import csv
-import json
 import logging
-import os
-from pathlib import Path
 from typing import Optional
-
-import requests
 from config import settings
 
 logging.basicConfig(level=logging.INFO)
@@ -260,6 +261,78 @@ CNAE_LC116_MAP = {
 }
 
 
+def _consultar_supabase(cnae_limpo: str) -> Optional[dict]:
+    """Consulta a tabela de correlação no Supabase."""
+    try:
+        from supabase import create_client
+        client = create_client(settings.SUPABASE_URL, settings.SUPABASE_KEY)
+        
+        if not client:
+            return None
+
+        # Tenta consultar pela view consolidada
+        response = client.table(settings.SUPABASE_TABLE_CORRELACAO).select("*").eq("cnae_codigo", cnae_limpo).limit(1).execute()
+        
+        if response.data and len(response.data) > 0:
+            row = response.data[0]
+            return {
+                "lc116": row.get("lc116_codigo", ""),
+                "descricao": row.get("lc116_descricao", row.get("cnae_descricao", "")),
+                "nbs": row.get("nbs_codigo", ""),
+                "nbs_descricao": row.get("nbs_descricao", ""),
+                "csn": row.get("csn_codigo", ""),
+                "csn_descricao": row.get("csn_descricao", ""),
+                "fonte": "Banco Wiserule (Supabase)",
+            }
+
+        # Se não encontrou, tenta pelo código de NBS
+        response = client.table(settings.SUPABASE_TABLE_CORRELACAO).select("*").ilike("cnae_codigo", f"{cnae_limpo}%").limit(1).execute()
+        if response.data and len(response.data) > 0:
+            row = response.data[0]
+            return {
+                "lc116": row.get("lc116_codigo", ""),
+                "descricao": row.get("lc116_descricao", row.get("cnae_descricao", "")),
+                "nbs": row.get("nbs_codigo", ""),
+                "nbs_descricao": row.get("nbs_descricao", ""),
+                "csn": row.get("csn_codigo", ""),
+                "csn_descricao": row.get("csn_descricao", ""),
+                "fonte": "Banco Wiserule (Supabase)",
+            }
+
+        return None
+
+    except Exception as e:
+        logger.warning(f"Erro ao consultar Supabase: {e}")
+        return None
+
+
+def _consultar_supabase_por_descricao(descricao: str) -> Optional[dict]:
+    """Consulta a tabela de correlação no Supabase por descrição."""
+    try:
+        from supabase import create_client
+        client = create_client(settings.SUPABASE_URL, settings.SUPABASE_KEY)
+        
+        if not client:
+            return None
+
+        response = client.table(settings.SUPABASE_TABLE_CORRELACAO).select("*").ilike("lc116_descricao", f"%{descricao[:30]}%").limit(1).execute()
+        
+        if response.data and len(response.data) > 0:
+            row = response.data[0]
+            return {
+                "lc116": row.get("lc116_codigo", ""),
+                "descricao": row.get("lc116_descricao", row.get("cnae_descricao", "")),
+                "nbs": row.get("nbs_codigo", ""),
+                "csn": row.get("csn_codigo", ""),
+                "fonte": "Banco Wiserule (Supabase por descrição)",
+            }
+
+        return None
+
+    except Exception:
+        return None
+
+
 def correlacionar_por_cnae(cnae_codigo: str, descricao_servico: str = "") -> dict:
     """
     Correlaciona um CNAE com a LC 116/2003 usando tabela interna.
@@ -274,12 +347,24 @@ def correlacionar_por_cnae(cnae_codigo: str, descricao_servico: str = "") -> dic
     # Limpa o código CNAE (remove traços, barras, apenas números)
     cnae_limpo = "".join(filter(str.isdigit, str(cnae_codigo)))
 
-    resultado = _buscar_na_tabela(cnae_limpo)
+    # 1º: Tenta consultar no Supabase
+    if settings.SUPABASE_URL and settings.SUPABASE_KEY:
+        resultado = _consultar_supabase(cnae_limpo)
+        if resultado:
+            return resultado
 
+    # 2º: Tenta na tabela interna
+    resultado = _buscar_na_tabela(cnae_limpo)
     if resultado:
         return resultado
 
-    # Fallback: busca por descrição do serviço
+    # 3º: Fallback por descrição no Supabase
+    if descricao_servico and settings.SUPABASE_URL and settings.SUPABASE_KEY:
+        resultado = _consultar_supabase_por_descricao(descricao_servico)
+        if resultado:
+            return resultado
+
+    # 4º: Fallback por descrição na tabela interna
     if descricao_servico:
         resultado = _buscar_por_descricao(descricao_servico)
         if resultado:
@@ -290,7 +375,7 @@ def correlacionar_por_cnae(cnae_codigo: str, descricao_servico: str = "") -> dic
         "descricao": "",
         "nbs": "",
         "csn": "",
-        "fonte": "Tabela interna Wiserule (pública)",
+        "fonte": "Não encontrado",
     }
 
 
