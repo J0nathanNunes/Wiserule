@@ -10,7 +10,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from config import settings
 from models import AnaliseResponse
 from cnpj import consultar_cnpj, consultar_cnpj_fallback
-from legisweb import correlacionar_servico, formatar_correlacao_para_llm
 from busca_online import buscar_online, formatar_busca_para_llm
 from agente_llm import (
     gerar_analise,
@@ -19,6 +18,11 @@ from agente_llm import (
 )
 from database import salvar_analise, listar_analises, buscar_analise_por_id
 from ibs_cbs import consultar_class_trib, formatar_info_ibs_cbs
+from correlacao_interna import correlacionar_por_cnae, formatar_correlacao_para_llm as formatar_correlacao_interna
+from tarefas import (
+    criar_tarefa, atualizar_tarefa, obter_tarefa,
+    StatusTarefa, processar_analise_progressiva,
+)
 from tarefas import (
     criar_tarefa, atualizar_tarefa, obter_tarefa,
     StatusTarefa, processar_analise_progressiva,
@@ -117,8 +121,24 @@ async def analisar_nfse(
             return emp
 
         async def correlacionar_async():
-            corr = correlacionar_servico(servico, cidade, uf)
-            return formatar_correlacao_para_llm(corr)
+            # Tenta LegisWeb primeiro (se configurado)
+            if settings.LEGISWEB_TOKEN and settings.LEGISWEB_CODIGO_CLIENTE:
+                from legisweb import correlacionar_servico as leg_corr
+                from legisweb import formatar_correlacao_para_llm as leg_fmt
+                corr = leg_corr(servico, cidade, uf)
+                resultado = leg_fmt(corr)
+                if resultado and "Correlação não encontrada" not in resultado:
+                    return resultado
+            # Fallback: correlação interna gratuita
+            cnae_empresa = ""
+            try:
+                emp = consultar_cnpj(cnpj)
+                if emp and hasattr(emp, 'cnae') and emp.cnae:
+                    cnae_empresa = emp.cnae
+            except Exception:
+                pass
+            corr = correlacionar_por_cnae(cnae_empresa, servico)
+            return formatar_correlacao_interna(corr)
 
         async def consultar_ibs_cbs_async():
             return formatar_info_ibs_cbs(consultar_class_trib())
