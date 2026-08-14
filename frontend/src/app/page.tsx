@@ -46,6 +46,7 @@ Sou um assistente especializado em análise de Notas Fiscais de Serviço. Posso 
   ]);
 
   const [isLoading, setIsLoading] = useState(false);
+  const [statusMsg, setStatusMsg] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -56,6 +57,67 @@ Sou um assistente especializado em análise de Notas Fiscais de Serviço. Posso 
   }, [messages]);
 
   const API_BASE = '/api';
+
+  // Polling: acompanha o progresso da tarefa
+  const pollTask = async (taskId: string, assistantMsgId: string) => {
+    const maxAttempts = 60; // 60 * 2s = 120s timeout
+    let attempts = 0;
+
+    const poll = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/analisar/status/${taskId}`);
+        const data = await res.json();
+
+        if (data.status === 'erro' || data.erro) {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantMsgId ? { ...m, content: `❌ **Erro na análise:** ${data.erro || 'Erro desconhecido'}` } : m
+            )
+          );
+          setIsLoading(false);
+          setStatusMsg('');
+          return;
+        }
+
+        // Atualiza status
+        setStatusMsg(data.etapa_atual || `Analisando... (${data.progresso || 0}%)`);
+
+        if (data.status === 'concluido' && data.relatorio_completo) {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantMsgId ? { ...m, content: data.relatorio_completo } : m
+            )
+          );
+          setIsLoading(false);
+          setStatusMsg('');
+          return;
+        }
+
+        if (attempts < maxAttempts) {
+          attempts++;
+          setTimeout(poll, 2000);
+        } else {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantMsgId ? { ...m, content: '⏱️ **Tempo limite excedido.** Tente novamente.' } : m
+            )
+          );
+          setIsLoading(false);
+          setStatusMsg('');
+        }
+      } catch {
+        if (attempts < maxAttempts) {
+          attempts++;
+          setTimeout(poll, 2000);
+        } else {
+          setIsLoading(false);
+          setStatusMsg('');
+        }
+      }
+    };
+
+    poll();
+  };
 
   const addMessage = (role: 'user' | 'assistant', content: string) => {
     const newMsg: Message = {
@@ -70,6 +132,7 @@ Sou um assistente especializado em análise de Notas Fiscais de Serviço. Posso 
 
   const enviarParaAnalise = async (formData: FormData, arquivo?: File | null) => {
     setIsLoading(true);
+    setStatusMsg('Iniciando análise...');
 
     const formPayload = new FormData();
     formPayload.append('cnpj', formData.cnpj.replace(/\D/g, ''));
@@ -88,24 +151,32 @@ Sou um assistente especializado em análise de Notas Fiscais de Serviço. Posso 
         body: formPayload,
       });
 
-      if (!response.ok) {
-        throw new Error(`Erro HTTP ${response.status}`);
-      }
+      if (!response.ok) throw new Error(`Erro HTTP ${response.status}`);
 
       const data = await response.json();
 
       if (data.status === 'erro') {
         addMessage('assistant', `❌ **Erro na análise:** ${data.erro}`);
+        setIsLoading(false);
+        setStatusMsg('');
+        return;
+      }
+
+      // Cria mensagem placeholder do assistente
+      const assistantMsg = addMessage('assistant', '⏳ **Analisando...**');
+
+      // Inicia polling se tiver task_id
+      if (data.dados_extraidos?.task_id) {
+        pollTask(data.dados_extraidos.task_id, assistantMsg.id);
       } else {
-        addMessage('assistant', data.resumo);
+        addMessage('assistant', data.resumo || '✅ Análise concluída.');
+        setIsLoading(false);
+        setStatusMsg('');
       }
     } catch (error: any) {
-      addMessage(
-        'assistant',
-        `❌ **Erro de conexão:** Não foi possível conectar ao servidor.\n\n${error.message}\n\nVerifique se o backend está rodando em \`http://localhost:8000\`.`
-      );
-    } finally {
+      addMessage('assistant', `❌ **Erro de conexão:** ${error.message}`);
       setIsLoading(false);
+      setStatusMsg('');
     }
   };
 
@@ -114,6 +185,7 @@ Sou um assistente especializado em análise de Notas Fiscais de Serviço. Posso 
     if (arquivo && !texto.trim()) {
       addMessage('user', `📎 **Arquivo anexado:** \`${arquivo.name}\``);
       setIsLoading(true);
+      setStatusMsg('Extraindo dados do arquivo...');
 
       const formPayload = new FormData();
       formPayload.append('arquivo', arquivo);
@@ -130,16 +202,24 @@ Sou um assistente especializado em análise de Notas Fiscais de Serviço. Posso 
 
         if (data.status === 'erro') {
           addMessage('assistant', `❌ **Erro na análise:** ${data.erro}`);
+          setIsLoading(false);
+          setStatusMsg('');
+          return;
+        }
+
+        const assistantMsg = addMessage('assistant', '⏳ **Analisando...**');
+
+        if (data.dados_extraidos?.task_id) {
+          pollTask(data.dados_extraidos.task_id, assistantMsg.id);
         } else {
-          addMessage('assistant', data.resumo);
+          addMessage('assistant', data.resumo || '✅ Análise concluída.');
+          setIsLoading(false);
+          setStatusMsg('');
         }
       } catch (error: any) {
-        addMessage(
-          'assistant',
-          `❌ **Erro de conexão:** Não foi possível conectar ao servidor.\n\n${error.message}`
-        );
-      } finally {
+        addMessage('assistant', `❌ **Erro de conexão:** ${error.message}`);
         setIsLoading(false);
+        setStatusMsg('');
       }
       return;
     }
@@ -152,9 +232,8 @@ Sou um assistente especializado em análise de Notas Fiscais de Serviço. Posso 
     }
 
     addMessage('user', mensagemUsuario);
-
-    // Tenta extrair dados do texto via API /analisar com mensagem
     setIsLoading(true);
+    setStatusMsg('Analisando...');
 
     const formPayload = new FormData();
     formPayload.append('mensagem', texto);
@@ -169,24 +248,30 @@ Sou um assistente especializado em análise de Notas Fiscais de Serviço. Posso 
         body: formPayload,
       });
 
-      if (!response.ok) {
-        throw new Error(`Erro HTTP ${response.status}`);
-      }
+      if (!response.ok) throw new Error(`Erro HTTP ${response.status}`);
 
       const data = await response.json();
 
       if (data.status === 'erro') {
         addMessage('assistant', `❌ **Erro na análise:** ${data.erro}`);
+        setIsLoading(false);
+        setStatusMsg('');
+        return;
+      }
+
+      const assistantMsg = addMessage('assistant', '⏳ **Analisando...**');
+
+      if (data.dados_extraidos?.task_id) {
+        pollTask(data.dados_extraidos.task_id, assistantMsg.id);
       } else {
-        addMessage('assistant', data.resumo);
+        addMessage('assistant', data.resumo || '✅ Análise concluída.');
+        setIsLoading(false);
+        setStatusMsg('');
       }
     } catch (error: any) {
-      addMessage(
-        'assistant',
-        `❌ **Erro de conexão:** Não foi possível conectar ao servidor.\n\n${error.message}\n\nVerifique se o backend está rodando em \`http://localhost:8000\`.`
-      );
-    } finally {
+      addMessage('assistant', `❌ **Erro de conexão:** ${error.message}`);
       setIsLoading(false);
+      setStatusMsg('');
     }
   };
 
@@ -247,8 +332,8 @@ Envie os dados da NFSe que desejo ajudar.`,
               <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-sm flex-shrink-0">
                 🤖
               </div>
-              <div className="bg-slate-800 rounded-2xl rounded-tl-sm px-5 py-3 border border-slate-700">
-                <div className="flex items-center gap-2">
+              <div className="bg-slate-800 rounded-2xl rounded-tl-sm px-5 py-3 border border-slate-700 max-w-md">
+                <div className="flex items-center gap-2 mb-1">
                   <div className="flex gap-1">
                     <span className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
                     <span className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
@@ -256,6 +341,11 @@ Envie os dados da NFSe que desejo ajudar.`,
                   </div>
                   <span className="text-sm text-slate-400 ml-2">Analisando...</span>
                 </div>
+                {statusMsg && (
+                  <div className="text-xs text-slate-500 mt-1 border-t border-slate-700 pt-1">
+                    {statusMsg}
+                  </div>
+                )}
               </div>
             </div>
           )}

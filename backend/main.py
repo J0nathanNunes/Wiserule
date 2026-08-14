@@ -19,6 +19,10 @@ from agente_llm import (
 )
 from database import salvar_analise, listar_analises, buscar_analise_por_id
 from ibs_cbs import consultar_class_trib, formatar_info_ibs_cbs
+from tarefas import (
+    criar_tarefa, atualizar_tarefa, obter_tarefa,
+    StatusTarefa, processar_analise_progressiva,
+)
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -69,75 +73,56 @@ async def analisar_nfse(
 ):
     """
     Endpoint principal de análise de NFSe.
-
-    Aceita dados via formulário (CNPJ, serviço, valor, cidade, UF)
-    ou mensagem em linguagem natural, além de arquivo opcional (imagem/PDF).
+    Retorna imediatamente com status "processando" e um task_id.
+    O frontend deve usar GET /analisar/status/{task_id} para acompanhar.
     """
     try:
         # --- FASE 1: Extrair dados ---
         dados_extraidos = {}
 
-        # 1a: Se tem arquivo, faz OCR (SEMPRE, independente de mensagem)
+        # 1a: Se tem arquivo, faz OCR
         if arquivo and arquivo.filename:
             conteudo = await arquivo.read()
-
-            # Valida tamanho
             if len(conteudo) > settings.MAX_FILE_SIZE_MB * 1024 * 1024:
-                raise HTTPException(
-                    status_code=413,
-                    detail=f"Arquivo muito grande. Máximo: {settings.MAX_FILE_SIZE_MB}MB",
-                )
+                raise HTTPException(status_code=413, detail=f"Arquivo muito grande. Máximo: {settings.MAX_FILE_SIZE_MB}MB")
 
             extensao = arquivo.filename.rsplit(".", 1)[-1].lower() if "." in arquivo.filename else "png"
             arquivo_base64 = base64.b64encode(conteudo).decode()
-
             dados_extraidos = extrair_dados_nfse(arquivo_base64, extensao)
-            print(f"[OCR] Dados extraídos: {dados_extraidos}")
 
-        # 1b: Se tem mensagem em texto (sem arquivo), extrai via LLM
         elif mensagem and not any([cnpj, servico, valor, cidade]):
             dados_extraidos = extrair_dados_texto(mensagem)
-            print(f"[TEXTO] Dados extraídos: {dados_extraidos}")
 
-        # 1c: Mescla dados (manual/chat sobrescreve extraído do OCR)
+        # Mescla dados
         cnpj = cnpj or dados_extraidos.get("cnpj", "")
         servico = servico or dados_extraidos.get("servico", "")
         valor = float(valor) if valor else float(dados_extraidos.get("valor", 0.0) or 0.0)
         cidade = cidade or dados_extraidos.get("cidade", "")
         uf = uf or dados_extraidos.get("uf", "MS")
 
-        # Valida dados mínimos
         if not cnpj or not servico or not cidade:
-            return AnaliseResponse(
-                status="erro",
-                erro="Dados insuficientes. Informe CNPJ, serviço e cidade.",
-                dados_extraidos=dados_extraidos,
-            )
+            return AnaliseResponse(status="erro", erro="Dados insuficientes. Informe CNPJ, serviço e cidade.")
 
-        # Limpa CNPJ (apenas números)
         cnpj = "".join(filter(str.isdigit, cnpj))
 
-        # --- FASES 2, 3 e 4: Rodar em paralelo ---
+        # Cria tarefa e inicia processamento em background
+        task_id = criar_tarefa()
+        atualizar_tarefa(task_id, status=StatusTarefa.PROCESSANDO, progresso=10, etapa_atual="Consultando dados...")
+
+        # --- ETAPA RÁPIDA: CNPJ + Correlação (paralelo) ---
         async def consultar_cnpj_async():
-            empresa = consultar_cnpj(cnpj)
-            if not empresa.razao_social and empresa.situacao.startswith("Erro"):
-                empresa = consultar_cnpj_fallback(cnpj)
-            return empresa
+            emp = consultar_cnpj(cnpj)
+            if not emp.razao_social and hasattr(emp, 'situacao') and emp.situacao.startswith("Erro"):
+                emp = consultar_cnpj_fallback(cnpj)
+            return emp
 
         async def correlacionar_async():
-            correlacao = correlacionar_servico(servico, cidade, uf)
-            return formatar_correlacao_para_llm(correlacao)
-
-        async def buscar_online_async(cnae_str: str):
-            pergunta = f"{cnae_str} {servico} retenção ISS {cidade} {uf} LC 116 legislação"
-            resultados = buscar_online(pergunta)
-            return formatar_busca_para_llm(resultados)
+            corr = correlacionar_servico(servico, cidade, uf)
+            return formatar_correlacao_para_llm(corr)
 
         async def consultar_ibs_cbs_async():
-            dados = consultar_class_trib()
-            return formatar_info_ibs_cbs(dados)
+            return formatar_info_ibs_cbs(consultar_class_trib())
 
-        # Executa em paralelo
         empresa_task = asyncio.create_task(consultar_cnpj_async())
         correlacao_task = asyncio.create_task(correlacionar_async())
         ibs_cbs_task = asyncio.create_task(consultar_ibs_cbs_async())
@@ -146,51 +131,60 @@ async def analisar_nfse(
         correlacao_formatada = await correlacao_task
         info_ibs_cbs = await ibs_cbs_task
 
+        atualizar_tarefa(task_id, progresso=40, etapa_atual="Buscando referências online...")
+
         cnae_str = empresa.cnae if hasattr(empresa, 'cnae') and empresa.cnae else servico
-        busca_formatada = await buscar_online_async(cnae_str)
+        pergunta = f"{cnae_str} {servico} retenção ISS {cidade} {uf} LC 116 legislação"
+        resultados_busca = buscar_online(pergunta)
+        busca_formatada = formatar_busca_para_llm(resultados_busca)
 
-        # --- FASE 5: Gerar relatório ---
-        contexto = {
-            "empresa": empresa.model_dump() if hasattr(empresa, "model_dump") else empresa.__dict__,
-            "correlacao_formatada": correlacao_formatada,
-            "cnae_codigo": empresa.cnae if hasattr(empresa, 'cnae') else "",
-            "cnae_descricao": empresa.cnae_descricao if hasattr(empresa, 'cnae_descricao') else "",
-            "cnaes_secundarios": empresa.cnaes_secundarios if hasattr(empresa, 'cnaes_secundarios') else [],
-            "valor": valor,
-            "cidade": cidade,
-            "uf": uf,
-            "busca_formatada": busca_formatada,
-            "info_ibs_cbs": info_ibs_cbs,
-        }
+        atualizar_tarefa(task_id, progresso=60, etapa_atual="Gerando relatório completo...")
 
-        resumo = gerar_analise(contexto)
+        # Prepara dados da empresa para o dict
+        empresa_dict = empresa.model_dump() if hasattr(empresa, "model_dump") else empresa.__dict__
 
-        # --- FASE 6: Salvar histórico ---
-        try:
-            salvar_analise(
-                cnpj=cnpj,
-                servico=servico,
-                valor=valor,
-                cidade=cidade,
-                uf=uf,
-                resultado=resumo,
-            )
-        except Exception:
-            pass  # Falha no histórico não deve interromper a resposta
+        # Inicia processamento em background
+        asyncio.create_task(processar_analise_progressiva(
+            task_id=task_id,
+            cnpj=cnpj,
+            servico=servico,
+            valor=valor,
+            cidade=cidade,
+            uf=uf,
+            empresa_data=empresa_dict,
+            correlacao_formatada=correlacao_formatada,
+            info_ibs_cbs=info_ibs_cbs,
+            busca_formatada=busca_formatada,
+            dados_extraidos=dados_extraidos,
+        ))
 
+        # Retorna imediatamente com o task_id
         return AnaliseResponse(
-            status="sucesso",
-            resumo=resumo,
-            dados_extraidos=dados_extraidos if dados_extraidos else None,
+            status="processando",
+            resumo="",
+            dados_extraidos={"task_id": task_id, "cnpj": cnpj, "servico": servico, "cidade": cidade},
         )
 
     except HTTPException:
         raise
     except Exception as e:
-        return AnaliseResponse(
-            status="erro",
-            erro=f"Erro interno: {str(e)}",
-        )
+        return AnaliseResponse(status="erro", erro=f"Erro interno: {str(e)}")
+
+
+@app.get("/analisar/status/{task_id}")
+async def status_analise(task_id: str):
+    """Retorna o status atual de uma análise em andamento."""
+    tarefa = obter_tarefa(task_id)
+    if not tarefa:
+        raise HTTPException(status_code=404, detail="Tarefa não encontrada.")
+
+    return {
+        "status": tarefa["status"],
+        "progresso": tarefa["progresso"],
+        "etapa_atual": tarefa["etapa_atual"],
+        "relatorio_completo": tarefa.get("relatorio_completo"),
+        "erro": tarefa.get("erro"),
+    }
 
 
 @app.post("/extrair")
