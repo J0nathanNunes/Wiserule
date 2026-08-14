@@ -74,6 +74,15 @@ Analise CADA tributo individualmente com base no enquadramento:
 
 Indique valores percentuais e base legal de cada um.
 
+## 🏛️ Reforma Tributária - IBS e CBS
+Analise o impacto da reforma tributária (EC 132/2023) no serviço analisado:
+- **IBS** (Imposto sobre Bens e Serviços): substituirá ISS e ICMS (transição 2026-2033)
+- **CBS** (Contribuição sobre Bens e Serviços): substituirá PIS e COFINS
+- Use os dados fornecidos de cClassTrib/CST quando disponíveis
+- Explique o que muda para este tipo de serviço na nova sistemática
+- Base legal: EC 132/2023, PLP 68/2024
+Se os dados da API não estiverem disponíveis, explique o cenário geral de transição com base no seu conhecimento (atualizado até 2025/2026).
+
 ## 💬 Opiniões da Comunidade
 Resumo das informações encontradas nas buscas online, citando as fontes (URLs).
 Inclua alerta de que são complementares à legislação oficial.
@@ -214,6 +223,9 @@ Descrição: {contexto.get('cnae_descricao', '')}
 
 ## Correlação do Serviço (LC 116/2003, NBS, CSN)
 {contexto.get('correlacao_formatada', 'Não disponível')}
+
+## Reforma Tributária - IBS/CBS
+{contexto.get('info_ibs_cbs', 'Dados IBS/CBS indisponíveis.')}
 
 ## Valor do Serviço
 R$ {contexto.get('valor', 0):.2f}

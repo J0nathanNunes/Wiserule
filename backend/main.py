@@ -18,6 +18,7 @@ from agente_llm import (
     extrair_dados_texto,
 )
 from database import salvar_analise, listar_analises, buscar_analise_por_id
+from ibs_cbs import consultar_class_trib, formatar_info_ibs_cbs
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -132,12 +133,18 @@ async def analisar_nfse(
             resultados = buscar_online(pergunta)
             return formatar_busca_para_llm(resultados)
 
+        async def consultar_ibs_cbs_async():
+            dados = consultar_class_trib()
+            return formatar_info_ibs_cbs(dados)
+
         # Executa em paralelo
         empresa_task = asyncio.create_task(consultar_cnpj_async())
         correlacao_task = asyncio.create_task(correlacionar_async())
+        ibs_cbs_task = asyncio.create_task(consultar_ibs_cbs_async())
 
         empresa = await empresa_task
         correlacao_formatada = await correlacao_task
+        info_ibs_cbs = await ibs_cbs_task
 
         cnae_str = empresa.cnae if hasattr(empresa, 'cnae') and empresa.cnae else servico
         busca_formatada = await buscar_online_async(cnae_str)
@@ -153,6 +160,7 @@ async def analisar_nfse(
             "cidade": cidade,
             "uf": uf,
             "busca_formatada": busca_formatada,
+            "info_ibs_cbs": info_ibs_cbs,
         }
 
         resumo = gerar_analise(contexto)
