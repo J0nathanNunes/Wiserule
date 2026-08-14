@@ -41,10 +41,11 @@ O relatório DEVE conter estas seções obrigatórias:
 - CNAE principal e CNAEs secundários cadastrados na Receita Federal
 
 ## 🏢 Enquadramento Fiscal
-- Optante Simples Nacional: Sim/Não (e data de opção)
-- MEI: Sim/Não (e data de opção)
-- Datas de exclusão do Simples/MEI (se existirem, senão usar "-")
-- Use os campos: data_opcao_simples, data_exclusao_simples, data_opcao_mei, data_exclusao_mei dos dados da empresa
+- Optante Simples Nacional: Sim/Não/Não informado (use os campos simples_nacional e data_opcao_simples)
+- MEI: Sim/Não/Não informado (use os campos mei e data_opcao_mei)
+- Se simples_nacional for false ou null, considere como "Não" e mostre "-" para data
+- Se mei for false ou null, considere como "Não" e mostre "-" para data
+- Datas de exclusão do Simples/MEI: se existirem mostre a data, senão use "-"
 
 ## 🛠️ Serviço Prestado
 - Descrição do serviço, código LC 116/2003, CNAE, NBS, CSN (quando disponíveis)
@@ -206,6 +207,10 @@ def gerar_analise(contexto: dict) -> str:
         for campo in ['data_exclusao_simples', 'data_exclusao_mei', 'telefone', 'email']:
             if campo in empresa and empresa[campo] is None:
                 empresa[campo] = '-'
+        # Garante que booleanos não sejam None
+        for campo in ['simples_nacional', 'mei']:
+            if campo in empresa and empresa[campo] is None:
+                empresa[campo] = False
 
     mensagens = [
         {"role": "system", "content": SYSTEM_PROMPT_ANALISE},
