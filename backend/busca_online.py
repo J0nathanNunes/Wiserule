@@ -1,9 +1,114 @@
 """Módulo de busca online usando Tavily (com fallback Brave Search)."""
 
+import re
 import requests
 from tavily import TavilyClient
 from config import settings
 from models import ResultadoBusca
+
+# Domínios confiáveis para consultas contábeis e tributárias
+DOMINIOS_CONFIAVEIS = [
+    # Oficiais governamentais
+    "gov.br",
+    "receita.fazenda.gov.br",
+    "confaz.fazenda.gov.br",
+    "planalto.gov.br",
+    "camara.leg.br",
+    "senado.leg.br",
+    "ibge.gov.br",
+    "concla.ibge.gov.br",
+    "cff.svrs.rs.gov.br",
+    # Portais tributários
+    "portaltributario.com.br",
+    "guiatributario.net",
+    "legisweb.com.br",
+    "lefisc.com.br",
+    "normas.leg.br",
+    "sifisco.com.br",
+    "fiscosoft.com.br",
+    "iob.com.br",
+    "sage.com.br",
+    # Conselhos e associações
+    "crc.org.br",
+    "crcsp.org.br",
+    "cfc.org.br",
+    "crcms.org.br",
+    "sescon.org.br",
+    "febracis.org.br",
+    # Fóruns contábeis confiáveis
+    "contabeis.com.br",
+    "conjur.com.br",
+    "migalhas.com.br",
+    "jota.info",
+    "consultorjuridico.com.br",
+    # Notícias econômicas (relevantes)
+    "valor.globo.com",
+    "economia.uol.com.br",
+    "g1.globo.com/economia",
+    "infomoney.com.br",
+    "investnews.com.br",
+    # Municipais (leis)
+    "campogrande.ms.gov.br",
+    "diariooficial.ms.gov.br",
+    "leismunicipais.com.br",
+]
+
+DOMINIOS_BLOQUEADOS = [
+    "instagram.com",
+    "facebook.com",
+    "twitter.com",
+    "x.com",
+    "linkedin.com",
+    "tiktok.com",
+    "youtube.com",
+    "pinterest.com",
+    "blogspot.com",
+    "wordpress.com",
+    "wixsite.com",
+]
+
+
+def _dominio_confiavel(url: str) -> bool:
+    """Verifica se a URL é de um domínio confiável."""
+    if not url:
+        return False
+    url_lower = url.lower()
+
+    # Bloqueia domínios não confiáveis primeiro
+    for bloqueado in DOMINIOS_BLOQUEADOS:
+        if bloqueado in url_lower:
+            return False
+
+    # Verifica se é confiável
+    for confiavel in DOMINIOS_CONFIAVEIS:
+        if confiavel in url_lower:
+            return True
+
+    # Se não está em nenhuma lista, permite com ressalva (o LLM vai filtrar)
+    # Mas dá preferência para .gov.br, .org.br, .com.br relevantes
+    if url_lower.endswith(".gov.br") or url_lower.endswith(".org.br"):
+        return True
+
+    return False
+
+
+def _filtrar_resultados_confiaveis(resultados: list[ResultadoBusca]) -> list[ResultadoBusca]:
+    """Filtra e prioriza resultados de fontes confiáveis."""
+    confiaveis = []
+    nao_confiaveis = []
+
+    for r in resultados:
+        if _dominio_confiavel(r.url):
+            confiaveis.append(r)
+        else:
+            nao_confiaveis.append(r)
+
+    # Retorna até 3 confiáveis + 1 não confiável (se houver)
+    final = confiaveis[:3]
+    if len(final) < 3 and nao_confiaveis:
+        final.append(nao_confiaveis[0])
+
+    return final
 
 
 def buscar_online(pergunta: str) -> list[ResultadoBusca]:
@@ -42,7 +147,7 @@ def _buscar_tavily(pergunta: str) -> list[ResultadoBusca]:
                 content=item.get("raw_content") or item.get("content", ""),
             ))
 
-        return resultados
+        return _filtrar_resultados_confiaveis(resultados)
 
     except Exception:
         # Fallback para Brave se Tavily falhar
@@ -79,7 +184,7 @@ def _buscar_brave(pergunta: str) -> list[ResultadoBusca]:
                 content=conteudo or item.get("description", ""),
             ))
 
-        return resultados
+        return _filtrar_resultados_confiaveis(resultados)
 
     except requests.exceptions.RequestException:
         return []
@@ -114,7 +219,8 @@ def formatar_busca_para_llm(resultados: list[ResultadoBusca]) -> str:
 
     partes = []
     for i, r in enumerate(resultados, 1):
-        partes.append(f"Fonte {i}: {r.title}")
+        confiavel = "✅" if _dominio_confiavel(r.url) else "⚠️"
+        partes.append(f"Fonte {i} {confiavel}: {r.title}")
         partes.append(f"URL: {r.url}")
         if r.content:
             # Limita o conteúdo exibido

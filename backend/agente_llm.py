@@ -84,7 +84,9 @@ Analise o impacto da reforma tributária (EC 132/2023) no serviço analisado:
 Se os dados da API não estiverem disponíveis, explique o cenário geral de transição com base no seu conhecimento (atualizado até 2025/2026).
 
 ## 💬 Opiniões da Comunidade
-Resumo das informações encontradas nas buscas online, citando as fontes (URLs).
+Resumo das informações encontradas em sites e fóruns contábeis/tributários confiáveis, citando as fontes (URLs).
+Considere APENAS fontes de domínios confiáveis como: gov.br, portaltributario.com.br, contabeis.com.br, conjur.com.br, cfc.org.br, CRC, Sescon, e outros portais técnicos.
+Ignore redes sociais, blogs pessoais, Wikipédia e sites não especializados.
 Inclua alerta de que são complementares à legislação oficial.
 
 IMPORTANTE: Filtre os resultados. Se alguma fonte falar sobre assunto diferente do serviço analisado (ex.: construção civil quando o serviço é organização de eventos), descarte essa fonte e não a mencione.
