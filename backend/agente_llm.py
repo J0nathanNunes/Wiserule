@@ -99,7 +99,13 @@ Analise se os tributos federais (IRRF, CSLL, COFINS, PIS) devem ser destacados n
 - Se a empresa NÃO for optante do SN e o tomador for PJ: deve destacar
 - Se for optante do SN: não destaca (LC 123/2006)
 - A falta de destaque quando obrigatório pode gerar multa
-
+## 🧾 INSS - Cota Patronal (art. 31 Lei 8.212/91)
+Analise a obrigação de INSS com base nos dados fornecidos:
+- Se o prestador é **optante SN**: INSS já incluso no DAS, não há retenção
+- Se o prestador **NÃO é optante SN**: o tomador PJ **deve reter 11%** do valor bruto
+- Verifique se o tomador possui **CEBAS** (entidade filantrópica) → dispensado de reter
+- Se o CNPJ do tomador estiver na base de entidades isentas, considere como dispensado
+- Se for **construção civil** (CNAE 41-43): regras específicas de retenção
 ## �💬 Opiniões da Comunidade
 Resumo das informações encontradas em sites e fóruns contábeis/tributários confiáveis.
 Considere APENAS fontes de domínios confiáveis como: gov.br, portaltributario.com.br, contabeis.com.br, conjur.com.br, cfc.org.br, CRC, Sescon, e outros portais técnicos.

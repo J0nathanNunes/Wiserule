@@ -76,6 +76,7 @@ async def analisar_nfse(
     uf: str = Form("MS"),
     mensagem: str = Form(""),
     arquivo: Optional[UploadFile] = File(None),
+    cnpj_tomador: str = Form(""),
 ):
     """
     Endpoint principal de análise de NFSe.
@@ -167,12 +168,17 @@ async def analisar_nfse(
 
         simples_nacional = empresa.simples_nacional if hasattr(empresa, 'simples_nacional') else False
         cidade_prestador = empresa.municipio if hasattr(empresa, 'municipio') else ""
+        cnae_str = empresa.cnae if hasattr(empresa, 'cnae') and empresa.cnae else ""
         classificacao_fiscal = formatar_classificacao_para_llm(
             lc116_codigo=lc116_codigo,
             simples_nacional=simples_nacional,
             cidade_servico=cidade,
             uf_servico=uf,
             cidade_prestador=cidade_prestador,
+            cnpj_tomador=cnpj_tomador,
+            valor_servico=valor,
+            cnae_servico=cnae_str,
+            descricao_servico=servico,
         )
 
         # Inicia processamento em background

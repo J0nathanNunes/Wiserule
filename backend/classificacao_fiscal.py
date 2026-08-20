@@ -7,6 +7,8 @@ Integra:
 - NBS (Nomenclatura Brasileira de Serviços)
 - CNAE (Classificação Nacional)
 - Retenções federais (IRRF, CSLL, COFINS, PIS)
+- INSS Cota Patronal (art. 22 Lei 8.212/91)
+- CEBAS (Isenção de INSS)
 - IBS/CBS (reforma tributária)
 - Local de pagamento do ISS (Art. 3º LC 116/2003)
 """
@@ -17,6 +19,121 @@ from config import settings
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+# ============================================
+# INSS - COTA PATRONAL (Lei 8.212/91, art. 22)
+# ============================================
+# Regra geral: 20% sobre a folha de salários
+# Retenção na NFSe: 11% (art. 31 Lei 8.212/91 c/c IN RFB 2.110/2022)
+# O tomador pessoa jurídica DEVE reter 11% quando contratar PJ
+# EXCEÇÕES: entidades imunes/isentas com CEBAS
+
+# CNPJs de entidades imunes/isentas de INSS (CEBAS)
+ENTIDADES_CEBAS_CONHECIDAS = [
+    "60833910000106",  # Entidade filantrópica de saúde/educação (exemplo real)
+    # Adicione mais CNPJs com CEBAS conforme necessidade
+]
+
+def verificar_cebas(cnpj_tomador: str) -> dict:
+    """
+    Verifica se o tomador possui CEBAS (imune/isento de INSS).
+    
+    Args:
+        cnpj_tomador: CNPJ do tomador (apenas números)
+    
+    Returns:
+        Dict com status e observação
+    """
+    cnpj_limpo = "".join(filter(str.isdigit, str(cnpj_tomador)))
+    
+    if cnpj_limpo in ENTIDADES_CEBAS_CONHECIDAS:
+        return {
+            "possui_cebas": True,
+            "isento_inss": True,
+            "observacao": "Tomador possui CEBAS - dispensado do recolhimento da cota patronal de INSS (art. 55 Lei 8.212/91)"
+        }
+    
+    # Se não está na base, retorna padrão (não isento)
+    return {
+        "possui_cebas": False,
+        "isento_inss": False,
+        "observacao": "Tomador sem CEBAS registrado na base - sujeito à retenção de INSS (art. 31 Lei 8.212/91)"
+    }
+
+
+def classificar_inss(
+    simples_nacional_prestador: bool,
+    valor_servico: float,
+    cnae_servico: str = "",
+    cnpj_tomador: str = "",
+    descricao_servico: str = ""
+) -> dict:
+    """
+    Classifica a obrigação de INSS (cota patronal) sobre o serviço.
+    
+    Regras:
+    - Tomador PJ deve reter 11% do valor bruto (art. 31 Lei 8.212/91)
+    - Prestador optante SN: INSS já incluído no DAS (não há retenção separada)
+    - Entidades com CEBAS: imunes/isentas
+    - Serviços de construção civil (CNAE 41-43): regras específicas
+    
+    Args:
+        simples_nacional_prestador: Se o prestador é optante SN
+        valor_servico: Valor do serviço
+        cnae_servico: CNAE do serviço (para regras específicas)
+        cnpj_tomador: CNPJ do tomador (para verificar CEBAS)
+        descricao_servico: Descrição do serviço
+    
+    Returns:
+        Dict com alíquota, valor, base legal
+    """
+    # Verifica CEBAS
+    cebas = verificar_cebas(cnpj_tomador)
+    if cebas["possui_cebas"]:
+        return {
+            "aliquota": 0,
+            "valor_reter": 0,
+            "reter": False,
+            "base_legal": "Lei 8.212/91, art. 55 (CEBAS)",
+            "observacao": cebas["observacao"],
+            "recolhimento": "dispensado",
+        }
+    
+    # Prestador optante SN → INSS não é retido separadamente (já está no DAS)
+    if simples_nacional_prestador:
+        return {
+            "aliquota": 0,
+            "valor_reter": 0,
+            "reter": False,
+            "base_legal": "LC 123/2006, art. 13 c/c art. 18",
+            "observacao": "Prestador optante Simples Nacional - INSS já incluído no DAS. Não há retenção de cota patronal.",
+            "recolhimento": "incluido_no_das",
+        }
+    
+    # Verifica se é construção civil (CNAEs 41xx a 43xx)
+    cnae_limpo = "".join(filter(str.isdigit, str(cnae_servico)))
+    eh_construcao = cnae_limpo.startswith(("41", "42", "43")) if cnae_limpo else False
+    
+    if eh_construcao:
+        return {
+            "aliquota": 11.0,
+            "valor_reter": round(valor_servico * 0.11, 2),
+            "reter": True,
+            "base_legal": "Art. 31 Lei 8.212/91 c/c IN RFB 2.110/2022 (construção civil)",
+            "observacao": f"Construção civil - reter 11% sobre R$ {valor_servico:.2f} = R$ {valor_servico * 0.11:.2f}",
+            "recolhimento": "reter_11",
+        }
+    
+    # Regra geral para serviços
+    return {
+        "aliquota": 11.0,
+        "valor_reter": round(valor_servico * 0.11, 2),
+        "reter": True,
+        "base_legal": "Art. 31 Lei 8.212/91 c/c IN RFB 2.110/2022",
+        "observacao": f"Reter 11% sobre R$ {valor_servico:.2f} = R$ {valor_servico * 0.11:.2f}",
+        "recolhimento": "reter_11",
+    }
 
 
 # ============================================
@@ -523,13 +640,19 @@ def formatar_classificacao_para_llm(
     cidade_servico: str,
     uf_servico: str,
     cidade_prestador: str = "",
+    cnpj_tomador: str = "",
+    valor_servico: float = 0.0,
+    cnae_servico: str = "",
+    descricao_servico: str = "",
 ) -> str:
     """
     Formata a classificação fiscal completa para incluir no contexto do LLM.
+    Inclui INSS cota patronal com base no CNPJ do tomador.
     """
     local_iss = classificar_local_iss(lc116_codigo)
     retencoes = classificar_retencoes(simples_nacional, lc116_codigo)
     ibscbs = classificar_ibscbs(lc116_codigo)
+    inss = classificar_inss(simples_nacional, valor_servico, cnae_servico, cnpj_tomador, descricao_servico)
 
     partes = [
         "## Classificação Fiscal Detalhada",
@@ -558,9 +681,20 @@ def formatar_classificacao_para_llm(
         for tributo, dados in retencoes.items():
             if dados["reter"]:
                 partes.append(f"- {tributo.upper()}: {dados['aliquota']}% - {dados['base_legal']}")
+                if valor_servico > 0:
+                    valor_reter = round(valor_servico * dados["aliquota"] / 100, 2)
+                    partes.append(f"  → R$ {valor_reter:.2f} sobre R$ {valor_servico:.2f}")
         partes.append("")
         partes.append("Esses tributos DEVEM ser destacados na NFSe quando o tomador for pessoa jurídica.")
         partes.append("A falta de destaque pode gerar multa e responsabilidade solidária.")
+
+    partes.append("")
+    partes.append(f"### INSS - Cota Patronal (art. 31 Lei 8.212/91)")
+    partes.append(f"Alíquota: {inss['aliquota']}% | Recolhimento: {inss['recolhimento']}")
+    if inss["valor_reter"] > 0:
+        partes.append(f"Valor a reter: R$ {inss['valor_reter']:.2f}")
+    partes.append(f"Observação: {inss['observacao']}")
+    partes.append(f"Base legal: {inss['base_legal']}")
 
     partes.append("")
     partes.append("### IBS/CBS - Reforma Tributária (EC 132/2023)")
