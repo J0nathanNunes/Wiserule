@@ -27,77 +27,122 @@ logger = logging.getLogger(__name__)
 # Regra geral: 20% sobre a folha de salários
 # Retenção na NFSe: 11% (art. 31 Lei 8.212/91 c/c IN RFB 2.110/2022)
 # O tomador pessoa jurídica DEVE reter 11% quando contratar PJ
-# EXCEÇÕES: entidades imunes/isentas com CEBAS
+# ============================================
+# INSS - COTA PATRONAL
+# Fundamento: art. 195, I, CF + Lei 8.212/91
+# ============================================
+# ATENÇÃO: Cota patronal NÃO é retenção na NFSe.
+# É uma contribuição previdenciária devida pelo tomador
+# quando contrata MEI para serviços específicos.
+#
+# Regras:
+# 1. MEI contribui com 5% do salário mínimo (INSS) via DAS-MEI
+# 2. Quando o MEI presta serviço para PJ, o tomador pode precisar
+#    recolher contribuição previdenciária adicional (art. 22, III Lei 8.212/91)
+# 3. O percentual é de 20% sobre a folha (regra geral), NÃO 11% sobre o valor
+# 4. O art. 31 Lei 8.212/91 trata de RETENÇÃO de 11% para cessão de mão de obra
+#    (substituição tributária), que é diferente de cota patronal
+#
+# Serviços que geram obrigação de cota patronal para MEI (art. 18, §5-C LC 123/2006):
+# - Serviços de hidráulica, eletricidade, pintura, alvenaria, carpintaria
+# - Serviços de manutenção e reparo
+# - Demolição e limpeza
+# - Outros serviços listados em regulamento
 
-# CNPJs de entidades imunes/isentas de INSS (CEBAS)
+# CNPJs de entidades imunes/isentas com CEBAS
 ENTIDADES_CEBAS_CONHECIDAS = [
-    "60833910000106",  # Entidade filantrópica de saúde/educação (exemplo real)
-    # Adicione mais CNPJs com CEBAS conforme necessidade
+    "60833910000106",
 ]
 
-def verificar_cebas(cnpj_tomador: str) -> dict:
-    """
-    Verifica se o tomador possui CEBAS (imune/isento de INSS).
-    
-    Args:
-        cnpj_tomador: CNPJ do tomador (apenas números)
-    
-    Returns:
-        Dict com status e observação
-    """
-    cnpj_limpo = "".join(filter(str.isdigit, str(cnpj_tomador)))
-    
-    if cnpj_limpo in ENTIDADES_CEBAS_CONHECIDAS:
-        return {
-            "possui_cebas": True,
-            "isento_inss": True,
-            "observacao": "Tomador possui CEBAS - dispensado do recolhimento da cota patronal de INSS (art. 55 Lei 8.212/91)"
-        }
-    
-    # Se não está na base, retorna padrão (não isento)
-    return {
-        "possui_cebas": False,
-        "isento_inss": False,
-        "observacao": "Tomador sem CEBAS registrado na base - sujeito à retenção de INSS (art. 31 Lei 8.212/91)"
-    }
+# Serviços que geram obrigação de cota patronal quando contratados de MEI
+SERVICOS_COTA_PATRONAL_MEI = [
+    "hidráulica", "eletricidade", "pintura", "alvenaria", "carpintaria",
+    "manutenção", "reparo", "demolição", "limpeza", "construção",
+    "pedreiro", "encanador", "eletricista", "pintor",
+    "serviços gerais", "conservação", "zeladoria",
+]
 
 
-def classificar_inss(
-    simples_nacional_prestador: bool,
-    valor_servico: float,
+def classificar_cota_patronal(
+    prestador_eh_mei: bool,
+    descricao_servico: str = "",
     cnae_servico: str = "",
     cnpj_tomador: str = "",
-    descricao_servico: str = ""
 ) -> dict:
     """
-    Classifica a obrigação de INSS (cota patronal) sobre o serviço.
-    
-    Regras:
-    - Tomador PJ deve reter 11% do valor bruto (art. 31 Lei 8.212/91)
-    - Prestador optante SN: INSS já incluído no DAS (não há retenção separada)
-    - Entidades com CEBAS: imunes/isentas
-    - Serviços de construção civil (CNAE 41-43): regras específicas
-    
+    Classifica a obrigação de cota patronal de INSS.
+
+    A cota patronal é uma contribuição previdenciária (art. 195, I, CF)
+    que o tomador pessoa jurídica pode precisar recolher quando contrata
+    MEI para serviços específicos.
+
+    NÃO CONFUNDIR com:
+    - Retenção de 11% (art. 31 Lei 8.212/91) → cessão de mão de obra
+    - INSS sobre folha (art. 22 Lei 8.212/91) → 20% sobre salários
+    - Ambas são obrigações diferentes da cota patronal
+
     Args:
-        simples_nacional_prestador: Se o prestador é optante SN
-        valor_servico: Valor do serviço
-        cnae_servico: CNAE do serviço (para regras específicas)
-        cnpj_tomador: CNPJ do tomador (para verificar CEBAS)
+        prestador_eh_mei: Se o prestador é MEI
         descricao_servico: Descrição do serviço
-    
+        cnae_servico: CNAE do serviço
+        cnpj_tomador: CNPJ do tomador (para CEBAS)
+
     Returns:
-        Dict com alíquota, valor, base legal
+        Dict com análise da cota patronal
     """
     # Verifica CEBAS
-    cebas = verificar_cebas(cnpj_tomador)
-    if cebas["possui_cebas"]:
+    cnpj_limpo = "".join(filter(str.isdigit, str(cnpj_tomador)))
+    if cnpj_limpo in ENTIDADES_CEBAS_CONHECIDAS:
         return {
-            "aliquota": 0,
-            "valor_reter": 0,
-            "reter": False,
-            "base_legal": "Lei 8.212/91, art. 55 (CEBAS)",
-            "observacao": cebas["observacao"],
+            "exige_cota_patronal": False,
+            "percentual": 0,
             "recolhimento": "dispensado",
+            "observacao": "Tomador com CEBAS - dispensado da cota patronal (art. 55 Lei 8.212/91)",
+            "base_legal": "Constituição Federal, art. 195, §7º c/c Lei 8.212/91, art. 55",
+        }
+
+    # Verifica se o prestador é MEI
+    if not prestador_eh_mei:
+        return {
+            "exige_cota_patronal": False,
+            "percentual": 0,
+            "recolhimento": "nao_se_aplica",
+            "observacao": "Prestador não é MEI. Cota patronal de INSS é devida pelo tomador "
+                         "diretamente sobre a folha de pagamento (20% - art. 22 Lei 8.212/91), "
+                         "não havendo recolhimento específico sobre o valor da NFSe.",
+            "base_legal": "Lei 8.212/91, art. 22",
+        }
+
+    # Prestador é MEI - verifica se o serviço gera obrigação de cota patronal
+    desc_lower = descricao_servico.lower()
+    servico_especifico = any(palavra in desc_lower for palavra in SERVICOS_COTA_PATRONAL_MEI)
+
+    # Verifica também pelo CNAE
+    cnae_limpo = "".join(filter(str.isdigit, str(cnae_servico)))
+    cnae_construcao = cnae_limpo.startswith(("41", "42", "43", "81")) if cnae_limpo else False
+
+    if servico_especifico or cnae_construcao:
+        return {
+            "exige_cota_patronal": True,
+            "percentual": 20,
+            "recolhimento": "tomador_recolhe_20",
+            "observacao": f"Prestador MEI prestando serviço de '{descricao_servico}'. "
+                         f"O tomador deve recolher contribuição previdenciária de 20% "
+                         f"sobre o valor da nota (art. 22, III Lei 8.212/91). "
+                         f"O MEI já recolhe 5% via DAS (art. 18, §5-C LC 123/2006), "
+                         f"mas a cota patronal adicional é devida pelo tomador.",
+            "base_legal": "CF art. 195, I; Lei 8.212/91, art. 22, III; LC 123/2006, art. 18, §5-C",
+        }
+
+    return {
+        "exige_cota_patronal": False,
+        "percentual": 0,
+        "recolhimento": "nao_exige",
+        "observacao": f"Prestador MEI, mas o serviço '{descricao_servico}' não está entre os "
+                     f"que geram obrigação de cota patronal adicional. "
+                     f"O MEI já recolhe 5% via DAS-MEI.",
+        "base_legal": "LC 123/2006, art. 18, §5-C",
+    }
         }
     
     # Prestador optante SN → INSS não é retido separadamente (já está no DAS)
@@ -644,15 +689,16 @@ def formatar_classificacao_para_llm(
     valor_servico: float = 0.0,
     cnae_servico: str = "",
     descricao_servico: str = "",
+    prestador_eh_mei: bool = False,
 ) -> str:
     """
     Formata a classificação fiscal completa para incluir no contexto do LLM.
-    Inclui INSS cota patronal com base no CNPJ do tomador.
+    Inclui análise de cota patronal de INSS.
     """
     local_iss = classificar_local_iss(lc116_codigo)
     retencoes = classificar_retencoes(simples_nacional, lc116_codigo)
     ibscbs = classificar_ibscbs(lc116_codigo)
-    inss = classificar_inss(simples_nacional, valor_servico, cnae_servico, cnpj_tomador, descricao_servico)
+    cota_patronal = classificar_cota_patronal(prestador_eh_mei, descricao_servico, cnae_servico, cnpj_tomador)
 
     partes = [
         "## Classificação Fiscal Detalhada",
@@ -689,12 +735,13 @@ def formatar_classificacao_para_llm(
         partes.append("A falta de destaque pode gerar multa e responsabilidade solidária.")
 
     partes.append("")
-    partes.append(f"### INSS - Cota Patronal (art. 31 Lei 8.212/91)")
-    partes.append(f"Alíquota: {inss['aliquota']}% | Recolhimento: {inss['recolhimento']}")
-    if inss["valor_reter"] > 0:
-        partes.append(f"Valor a reter: R$ {inss['valor_reter']:.2f}")
-    partes.append(f"Observação: {inss['observacao']}")
-    partes.append(f"Base legal: {inss['base_legal']}")
+    partes.append(f"### INSS - Cota Patronal (art. 195, I, CF)")
+    partes.append(f"Exige cota patronal: {'Sim' if cota_patronal['exige_cota_patronal'] else 'Não'}")
+    if cota_patronal["percentual"] > 0:
+        partes.append(f"Percentual: {cota_patronal['percentual']}% sobre o valor")
+    partes.append(f"Recolhimento: {cota_patronal['recolhimento']}")
+    partes.append(f"Observação: {cota_patronal['observacao']}")
+    partes.append(f"Base legal: {cota_patronal['base_legal']}")
 
     partes.append("")
     partes.append("### IBS/CBS - Reforma Tributária (EC 132/2023)")

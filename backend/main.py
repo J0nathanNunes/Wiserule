@@ -179,6 +179,7 @@ async def analisar_nfse(
             valor_servico=valor,
             cnae_servico=cnae_str,
             descricao_servico=servico,
+            prestador_eh_mei=empresa.mei if hasattr(empresa, 'mei') else False,
         )
 
         # Inicia processamento em background

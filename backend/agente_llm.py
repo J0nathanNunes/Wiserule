@@ -106,6 +106,13 @@ Analise a obrigação de INSS com base nos dados fornecidos:
 - Verifique se o tomador possui **CEBAS** (entidade filantrópica) → dispensado de reter
 - Se o CNPJ do tomador estiver na base de entidades isentas, considere como dispensado
 - Se for **construção civil** (CNAE 41-43): regras específicas de retenção
+## 🧾 INSS - Cota Patronal (art. 195, I, CF)
+Analise a cota patronal de INSS com base nos dados fornecidos:
+- A cota patronal é uma contribuição previdenciária, **NÃO é retenção na NFSe**
+- Se o prestador **NÃO é MEI**: cota patronal já está na folha (20% - art. 22 Lei 8.212/91)
+- Se o prestador **é MEI** e o serviço é específico (hidráulica, elétrica, pintura, alvenaria, etc.): o tomador recolhe 20% adicional
+- Tomador com **CEBAS**: dispensado (art. 55 Lei 8.212/91)
+- O MEI já recolhe 5% do salário mínimo via DAS-MEI
 ## �💬 Opiniões da Comunidade
 Resumo das informações encontradas em sites e fóruns contábeis/tributários confiáveis.
 Considere APENAS fontes de domínios confiáveis como: gov.br, portaltributario.com.br, contabeis.com.br, conjur.com.br, cfc.org.br, CRC, Sescon, e outros portais técnicos.
