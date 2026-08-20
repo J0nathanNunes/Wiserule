@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-@router.get("/api/diagnostico")
+@router.get("/diagnostico")
 async def diagnostico_apis():
     """
     Testa cada API individualmente e retorna o resultado detalhado.
