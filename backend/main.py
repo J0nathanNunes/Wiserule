@@ -4,6 +4,8 @@ import asyncio
 import base64
 from typing import Optional
 
+from datetime import datetime
+
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -73,7 +75,7 @@ async def health_detalhado():
     """Endpoint simplificado que testa APIs rapidamente."""
     resultados = {
         "app": settings.APP_NAME,
-        "timestamp": __import__("datetime").datetime.now().isoformat(),
+        "timestamp": datetime.now().isoformat(),
         "apis": {},
     }
 

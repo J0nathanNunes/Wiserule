@@ -14,3 +14,4 @@
   from = "/api/*"
   to = "https://wiserule-production.up.railway.app/:splat"
   status = 200
+  force = true
