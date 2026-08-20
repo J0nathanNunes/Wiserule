@@ -35,8 +35,22 @@ class Settings:
     GERANET_API_KEY: str = os.getenv("GERANET_API_KEY", "")
 
     # Certificado digital A1 (.pfx) para Geranet
-    # LOCAL:  coloque o caminho do arquivo .pfx
-    # RAILWAY: converta para base64 e coloque aqui
+    #
+    # Você pode configurar de 3 formas:
+    #
+    # 1) Múltiplos certificados LOCAIS (recomendado)
+    #    Coloque os .pfx na pasta backend/certificados/
+    #    Nomeie como {ANO}-{CNPJ}.pfx (ex: 2026-07121135000316.pfx)
+    #    A senha deve ser a mesma para todos
+    #
+    # 2) Múltiplos certificados no RAILWAY
+    #    GERANET_CERTS_JSON = {"07121135000316": "base64...", "60833910001906": "base64..."}
+    #
+    # 3) Único certificado (legado)
+    #    GERANET_CERT_BASE64 ou GERANET_CERT_PATH + GERANET_CERT_PASSWORD
+    #
+    GERANET_CERTS_DIR: str = os.getenv("GERANET_CERTS_DIR", "certificados")
+    GERANET_CERTS_JSON: str = os.getenv("GERANET_CERTS_JSON", "")
     GERANET_CERT_PATH: str = os.getenv("GERANET_CERT_PATH", "")
     GERANET_CERT_BASE64: str = os.getenv("GERANET_CERT_BASE64", "")
     GERANET_CERT_PASSWORD: str = os.getenv("GERANET_CERT_PASSWORD", "")

@@ -1,7 +1,13 @@
-"""Integração com a API Geranet para consulta e emissão de NFSe no padrão nacional."""
+"""Integração com a API Geranet para consulta e emissão de NFSe no padrão nacional.
+
+Suporte a múltiplos certificados: o sistema localiza automaticamente o certificado
+pelo CNPJ do prestador.
+"""
 
 import base64
+import json
 import logging
+import re
 from typing import Optional
 from pathlib import Path
 
@@ -11,50 +17,141 @@ from config import settings
 logger = logging.getLogger(__name__)
 
 GERANET_BASE_URL = "https://nfe.geranet.net/api/v1"
+CERTS_DIR = Path(settings.GERANET_CERTS_DIR)
+
+# Cache de certificados carregados (CNPJ -> hex)
+_cert_cache: dict[str, str] = {}
 
 
-def arquivo_para_hexadecimal(caminho_arquivo: str) -> str:
+def _extrair_cnpj_do_nome(arquivo: str) -> str | None:
     """
-    Lê um certificado digital A1 (.pfx) e retorna seu conteúdo em hexadecimal.
+    Extrai o CNPJ de um nome de arquivo no formato {ANO}-{CNPJ}.pfx.
 
-    Args:
-        caminho_arquivo: Caminho absoluto para o arquivo .pfx
+    Exemplo: '2026-07121135000316.pfx' -> '07121135000316'
+    """
+    match = re.search(r"\d{14}", arquivo)
+    return match.group(0) if match else None
+
+
+def _listar_certificados_locais() -> dict[str, Path]:
+    """
+    Varre a pasta de certificados e mapeia CNPJ -> caminho do arquivo.
 
     Returns:
-        String hexadecimal do conteúdo do certificado
+        Dict {cnpj: Path do arquivo .pfx}
     """
-    return Path(caminho_arquivo).read_bytes().hex()
+    if not CERTS_DIR.exists():
+        logger.warning("Pasta de certificados não encontrada: %s", CERTS_DIR)
+        return {}
+
+    certs: dict[str, Path] = {}
+    for arquivo in CERTS_DIR.iterdir():
+        if arquivo.suffix.lower() != ".pfx":
+            continue
+        cnpj = _extrair_cnpj_do_nome(arquivo.name)
+        if cnpj:
+            certs[cnpj] = arquivo
+            logger.debug("Certificado encontrado: CNPJ=%s -> %s", cnpj, arquivo.name)
+        else:
+            logger.warning("Nome de arquivo inválido (sem CNPJ): %s", arquivo.name)
+
+    return certs
 
 
-def _obter_certificado_hex() -> str:
+def _carregar_certs_json() -> dict[str, str]:
     """
-    Obtém o certificado digital em hexadecimal automaticamente.
+    Carrega certificados do JSON configurado em GERANET_CERTS_JSON.
 
-    Prioridade:
-    1. GERANET_CERT_BASE64 (env) — útil no Railway
-    2. GERANET_CERT_PATH (caminho do .pfx) — uso local
+    Formato esperado: {"07121135000316": "base64...", "60833910001906": "base64..."}
+
+    Returns:
+        Dict {cnpj: hex do certificado}
+    """
+    if not settings.GERANET_CERTS_JSON:
+        return {}
+
+    try:
+        raw = json.loads(settings.GERANET_CERTS_JSON)
+        return {cnpj: base64.b64decode(b64).hex() for cnpj, b64 in raw.items()}
+    except (json.JSONDecodeError, ValueError, KeyError) as e:
+        logger.error("Erro ao decodificar GERANET_CERTS_JSON: %s", e)
+        return {}
+
+
+def _obter_certificado_hex(cnpj: str | None = None) -> str:
+    """
+    Obtém o certificado digital em hexadecimal para o CNPJ informado.
+
+    Ordem de busca:
+    1. Cache interno
+    2. GERANET_CERTS_JSON (Railway - multi-cert)
+    3. Certificados locais (pasta certificados/)
+    4. GERANET_CERT_BASE64 (Railway - certificado único)
+    5. GERANET_CERT_PATH (local - certificado único)
+
+    Args:
+        cnpj: CNPJ do prestador (apenas números, 14 dígitos).
+              Se None, tenta certificado único (legado).
 
     Returns:
         String hexadecimal do certificado
 
     Raises:
-        ValueError: Se nenhuma fonte estiver configurada
+        ValueError: Se não encontrar certificado para o CNPJ
     """
-    if settings.GERANET_CERT_BASE64:
-        logger.info("Carregando certificado via GERANET_CERT_BASE64")
-        return base64.b64decode(settings.GERANET_CERT_BASE64).hex()
+    # 1. Cache
+    if cnpj and cnpj in _cert_cache:
+        logger.info("Usando certificado em cache para CNPJ=%s", cnpj)
+        return _cert_cache[cnpj]
 
+    # 2. JSON multi-cert (Railway)
+    certs_json = _carregar_certs_json()
+    if cnpj and cnpj in certs_json:
+        logger.info("Carregando certificado de GERANET_CERTS_JSON para CNPJ=%s", cnpj)
+        _cert_cache[cnpj] = certs_json[cnpj]
+        return certs_json[cnpj]
+
+    # 3. Certificados locais
+    certs_locais = _listar_certificados_locais()
+    if cnpj and cnpj in certs_locais:
+        caminho = certs_locais[cnpj]
+        logger.info("Carregando certificado local para CNPJ=%s: %s", cnpj, caminho.name)
+        hex_cert = caminho.read_bytes().hex()
+        _cert_cache[cnpj] = hex_cert
+        return hex_cert
+
+    # 4. Base64 único (Railway legado)
+    if settings.GERANET_CERT_BASE64:
+        logger.info("Carregando certificado via GERANET_CERT_BASE64 (certificado único)")
+        hex_cert = base64.b64decode(settings.GERANET_CERT_BASE64).hex()
+        if cnpj:
+            _cert_cache[cnpj] = hex_cert
+        return hex_cert
+
+    # 5. Path único (local legado)
     if settings.GERANET_CERT_PATH:
-        caminho = settings.GERANET_CERT_PATH
-        if not Path(caminho).exists():
+        caminho = Path(settings.GERANET_CERT_PATH)
+        if not caminho.exists():
             raise ValueError(f"Certificado não encontrado: {caminho}")
         logger.info("Carregando certificado de: %s", caminho)
-        return Path(caminho).read_bytes().hex()
+        hex_cert = caminho.read_bytes().hex()
+        if cnpj:
+            _cert_cache[cnpj] = hex_cert
+        return hex_cert
 
-    raise ValueError(
-        "Nenhum certificado configurado. Defina GERANET_CERT_BASE64 ou "
-        "GERANET_CERT_PATH no .env"
-    )
+    # Mensagem de erro amigável
+    if cnpj:
+        msg = (
+            f"Nenhum certificado encontrado para o CNPJ {cnpj}. "
+            f"Verifique se o arquivo {cnpj[:8]}...{cnpj[-4:]}.pfx está na pasta {CERTS_DIR} "
+            f"ou configure GERANET_CERTS_JSON no Railway."
+        )
+    else:
+        msg = (
+            "Nenhum certificado configurado. Defina GERANET_CERT_BASE64 (Railway) "
+            "ou GERANET_CERT_PATH (.env local) no .env"
+        )
+    raise ValueError(msg)
 
 
 def _headers() -> dict:
@@ -104,8 +201,8 @@ def consultar_notas(
     if not settings.GERANET_API_KEY:
         raise ValueError("GERANET_API_KEY não configurada no .env")
 
-    # Carrega certificado automaticamente se não fornecido
-    hex_cert = certificado_digital if certificado_digital else _obter_certificado_hex()
+    # Carrega certificado automaticamente pelo CNPJ se não fornecido
+    hex_cert = certificado_digital if certificado_digital else _obter_certificado_hex(cnpj)
     senha = senha_certificado if senha_certificado else settings.GERANET_CERT_PASSWORD
 
     if not senha:
