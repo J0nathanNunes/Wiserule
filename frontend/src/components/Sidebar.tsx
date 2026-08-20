@@ -249,17 +249,23 @@ export default function Sidebar({ isOpen, onToggle, onSubmit, isLoading, onNovaA
               const data = await res.json();
               setStatusApis(data);
             } catch (err) {
-              setStatusApis({ apis: { backend: { nome: 'Backend', status: 'offline', detalhe: 'Não foi possível conectar ao servidor' } } });
+              setStatusApis({
+                apis: {
+                  backend: { nome: 'Backend Wiserule', status: 'offline', detalhe: 'Falha na conexão com o servidor', latencia_ms: null },
+                },
+                resumo: { total: 1, online: 0, offline: 1, erro: 0, nao_configurada: 0 },
+                timestamp: new Date().toISOString(),
+              });
             } finally {
               setStatusLoading(false);
             }
           }}
-          className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-slate-700/50 text-slate-400 rounded-lg hover:bg-slate-700 hover:text-white transition-all text-xs"
+          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-700/50 text-slate-400 rounded-xl hover:bg-slate-700 hover:text-white hover:border-slate-500 transition-all text-xs border border-slate-600/50"
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
           </svg>
-          📡 Status das APIs
+          📡 Monitor de APIs
         </button>
       </div>
 
@@ -267,7 +273,7 @@ export default function Sidebar({ isOpen, onToggle, onSubmit, isLoading, onNovaA
       <StatusModal
         isOpen={statusModalOpen}
         onClose={() => setStatusModalOpen(false)}
-        apis={statusApis?.apis}
+        data={statusApis}
         loading={statusLoading}
         isDiagnostico={true}
       />
