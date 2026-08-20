@@ -32,6 +32,8 @@ from classificacao_fiscal import (
     formatar_classificacao_para_llm,
 )
 
+from diagnostico import router as diagnostico_router
+
 app = FastAPI(
     title=settings.APP_NAME,
     description="API de análise inteligente de NFSe do Wiserule",
@@ -51,6 +53,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Registra rotas de diagnóstico
+app.include_router(diagnostico_router)
 
 
 @app.get("/health")

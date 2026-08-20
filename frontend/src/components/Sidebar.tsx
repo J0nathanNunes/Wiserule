@@ -245,11 +245,11 @@ export default function Sidebar({ isOpen, onToggle, onSubmit, isLoading, onNovaA
             setStatusLoading(true);
             setStatusApis(null);
             try {
-              const res = await fetch('/api/health/detalhado');
+              const res = await fetch('/api/diagnostico');
               const data = await res.json();
               setStatusApis(data);
             } catch (err) {
-              setStatusApis({ backend: { status: 'offline', erro: 'Não foi possível conectar ao servidor' } });
+              setStatusApis({ apis: { backend: { nome: 'Backend', status: 'offline', detalhe: 'Não foi possível conectar ao servidor' } } });
             } finally {
               setStatusLoading(false);
             }
@@ -269,6 +269,7 @@ export default function Sidebar({ isOpen, onToggle, onSubmit, isLoading, onNovaA
         onClose={() => setStatusModalOpen(false)}
         apis={statusApis?.apis}
         loading={statusLoading}
+        isDiagnostico={true}
       />
     </div>
   );
