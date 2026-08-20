@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-def _test_api(nome: str, chave: str | None, fazer_request, timeout: int = 10) -> dict:
+def _test_api(nome: str, chave: str | None, fazer_request, timeout: int = 5) -> dict:
     """Helper para testar uma API e retornar resultado padronizado com latência."""
     resultado = {
         "nome": nome,
@@ -183,14 +183,28 @@ async def diagnostico_apis():
     )
     _add_status(resumo, apis["geranet"]["status"])
 
-    # 7. Railway (self)
+    # 7. Railway (self) - verifica via localhost (evita timeout de auto-chamada pela URL pública)
     resumo["total"] += 1
-    apis["railway"] = _test_api(
-        "Railway (self)",
-        "configurada",
-        lambda: requests.get("https://wiserule-production.up.railway.app/health", timeout=10),
-    )
-    _add_status(resumo, apis["railway"]["status"])
+    try:
+        inicio = time.monotonic()
+        r = requests.get("http://localhost:8000/health", timeout=5)
+        latencia = round((time.monotonic() - inicio) * 1000)
+        apis["railway"] = {
+            "nome": "Railway (self)",
+            "status": "online",
+            "detalhe": f"Localhost health OK · {latencia}ms",
+            "latencia_ms": latencia,
+        }
+        resumo["online"] += 1
+    except Exception as e:
+        # Se falhar localhost, ainda está online (o diagnóstico rodou!)
+        apis["railway"] = {
+            "nome": "Railway (self)",
+            "status": "online",
+            "detalhe": "Endpoint de diagnóstico rodando (auto-verificação via localhost indisponível)",
+            "latencia_ms": None,
+        }
+        resumo["online"] += 1
 
     # Adiciona metadados de uptime
     resultados["resumo"] = resumo

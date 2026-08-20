@@ -10,7 +10,7 @@ from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from config import settings
-from models import AnaliseResponse
+from models import AnaliseResponse, GeranetConsultaRequest, GeranetConsultaResponse
 from cnpj import consultar_cnpj, consultar_cnpj_fallback
 from busca_online import buscar_online, formatar_busca_para_llm
 from agente_llm import (
@@ -25,6 +25,7 @@ from tarefas import (
     criar_tarefa, atualizar_tarefa, obter_tarefa,
     StatusTarefa, processar_analise_progressiva,
 )
+from geranet import consultar_notas, extrair_notas_mais_recentes, resumir_consulta
 from classificacao_fiscal import (
     classificar_local_iss,
     classificar_retencoes,
@@ -33,6 +34,7 @@ from classificacao_fiscal import (
 )
 
 from diagnostico import router as diagnostico_router
+from geranet import consultar_notas
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -320,6 +322,39 @@ async def detalhe_analise(analise_id: int):
             "criado_em": analise.criado_em.isoformat() if hasattr(analise.criado_em, 'isoformat') else str(analise.criado_em),
         },
     }
+
+
+@app.post("/geranet/consultar-notas", response_model=GeranetConsultaResponse)
+async def geranet_consultar_notas(req: GeranetConsultaRequest):
+    """
+    Consulta NFSe no portal nacional via Geranet.
+
+    Requer certificado digital A1 em hexadecimal e senha.
+    Retorna a lista de notas encontradas com dados estruturados.
+    """
+    try:
+        dados = consultar_notas(
+            cnpj=req.cnpj,
+            inscricao_municipal=req.inscricao_municipal,
+            razao_social=req.razao_social,
+            municipio=req.municipio,
+            certificado_digital=req.certificado_digital,
+            senha_certificado=req.senha_certificado,
+            ultimo_nsu=req.ultimo_nsu,
+            chave_nfse=req.chave_nfse,
+        )
+        resumo = resumir_consulta(dados)
+        return GeranetConsultaResponse(
+            status="sucesso",
+            dados=dados,
+            resumo=resumo,
+        )
+    except ValueError as e:
+        return GeranetConsultaResponse(status="erro", erro=str(e))
+    except ConnectionError as e:
+        return GeranetConsultaResponse(status="erro", erro=str(e))
+    except Exception as e:
+        return GeranetConsultaResponse(status="erro", erro=f"Erro interno: {str(e)}")
 
 
 if __name__ == "__main__":

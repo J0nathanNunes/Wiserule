@@ -89,3 +89,23 @@ class AnaliseHistorico(BaseModel):
     uf: str = ""
     resultado_json: str = ""
     criado_em: datetime = datetime.now()
+
+
+class GeranetConsultaRequest(BaseModel):
+    """Payload para consulta de NFSe via Geranet."""
+    cnpj: str = Field(..., description="CNPJ do prestador (apenas números)", min_length=14, max_length=14)
+    inscricao_municipal: str = Field(..., description="Inscrição municipal do prestador")
+    razao_social: str = Field(..., description="Razão social do prestador")
+    municipio: str = Field(..., description="Código IBGE do município (7 dígitos)", min_length=7, max_length=7)
+    certificado_digital: str = Field(..., description="Certificado A1 em hexadecimal")
+    senha_certificado: str = Field(..., description="Senha do certificado A1")
+    ultimo_nsu: str = Field("0", description="NSU para paginação")
+    chave_nfse: Optional[str] = Field(None, description="Chave DF-e para consulta específica")
+
+
+class GeranetConsultaResponse(BaseModel):
+    """Resposta da consulta de NFSe via Geranet."""
+    status: str = "sucesso"
+    dados: Optional[dict] = None
+    resumo: Optional[dict] = None
+    erro: Optional[str] = None
