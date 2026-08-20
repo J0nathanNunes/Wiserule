@@ -270,7 +270,6 @@ export default function Sidebar({ isOpen, onToggle, onSubmit, isLoading, onNovaA
         apis={statusApis?.apis}
         loading={statusLoading}
       />
-      </div>
     </div>
   );
 }
