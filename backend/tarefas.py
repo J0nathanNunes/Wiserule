@@ -61,6 +61,7 @@ async def processar_analise_progressiva(
     info_ibs_cbs: str,
     busca_formatada: str,
     dados_extraidos: dict,
+    classificacao_fiscal: str = "",
 ):
     """
     Processa a análise em etapas, atualizando o status progressivamente.
@@ -89,6 +90,7 @@ async def processar_analise_progressiva(
             "uf": uf,
             "busca_formatada": busca_formatada,
             "info_ibs_cbs": info_ibs_cbs,
+            "classificacao_fiscal": classificacao_fiscal,
         }
 
         relatorio = await asyncio.to_thread(gerar_analise, contexto)

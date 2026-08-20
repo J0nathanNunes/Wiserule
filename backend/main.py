@@ -23,9 +23,11 @@ from tarefas import (
     criar_tarefa, atualizar_tarefa, obter_tarefa,
     StatusTarefa, processar_analise_progressiva,
 )
-from tarefas import (
-    criar_tarefa, atualizar_tarefa, obter_tarefa,
-    StatusTarefa, processar_analise_progressiva,
+from classificacao_fiscal import (
+    classificar_local_iss,
+    classificar_retencoes,
+    classificar_ibscbs,
+    formatar_classificacao_para_llm,
 )
 
 app = FastAPI(
@@ -155,6 +157,24 @@ async def analisar_nfse(
         # Prepara dados da empresa para o dict
         empresa_dict = empresa.model_dump() if hasattr(empresa, "model_dump") else empresa.__dict__
 
+        # Gera classificação fiscal detalhada
+        lc116_codigo = ""
+        if "LC 116/2003:" in correlacao_formatada:
+            import re
+            match = re.search(r"LC 116/2003:\s*([\d.]+)", correlacao_formatada)
+            if match:
+                lc116_codigo = match.group(1)
+
+        simples_nacional = empresa.simples_nacional if hasattr(empresa, 'simples_nacional') else False
+        cidade_prestador = empresa.municipio if hasattr(empresa, 'municipio') else ""
+        classificacao_fiscal = formatar_classificacao_para_llm(
+            lc116_codigo=lc116_codigo,
+            simples_nacional=simples_nacional,
+            cidade_servico=cidade,
+            uf_servico=uf,
+            cidade_prestador=cidade_prestador,
+        )
+
         # Inicia processamento em background
         asyncio.create_task(processar_analise_progressiva(
             task_id=task_id,
@@ -168,6 +188,7 @@ async def analisar_nfse(
             info_ibs_cbs=info_ibs_cbs,
             busca_formatada=busca_formatada,
             dados_extraidos=dados_extraidos,
+            classificacao_fiscal=classificacao_fiscal,
         ))
 
         # Retorna imediatamente com o task_id

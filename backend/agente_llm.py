@@ -78,7 +78,29 @@ Analise CADA tributo individualmente com base no enquadramento:
 
 Indique valores percentuais e base legal de cada um.
 
-## 💬 Opiniões da Comunidade
+## � Local de Pagamento do ISS
+Analise com base no Art. 3º da LC 116/2003:
+- O ISS é devido no **estabelecimento do prestador** ou no **local da execução**?
+- Use os dados de classificação fiscal fornecidos (local_pagamento, regra_descricao)
+- Se o serviço for executado em município diferente do prestador, alerte sobre isso
+- Informe se exige ART/CREA
+
+## 🔢 Códigos para Emissão NFSe
+Liste os códigos de classificação do serviço:
+- Item Lista Serviço (LC 116)
+- CNAE
+- NBS (quando disponível)
+- CSN (quando disponível - Código de Serviço Nacional)
+- CTM (Código de Tributação Municipal, quando disponível)
+- Código de Serviço Nacional (quando disponível)
+
+## 🧾 Destaque de Tributos na NFSe
+Analise se os tributos federais (IRRF, CSLL, COFINS, PIS) devem ser destacados na NFSe:
+- Se a empresa NÃO for optante do SN e o tomador for PJ: deve destacar
+- Se for optante do SN: não destaca (LC 123/2006)
+- A falta de destaque quando obrigatório pode gerar multa
+
+## �💬 Opiniões da Comunidade
 Resumo das informações encontradas em sites e fóruns contábeis/tributários confiáveis.
 Considere APENAS fontes de domínios confiáveis como: gov.br, portaltributario.com.br, contabeis.com.br, conjur.com.br, cfc.org.br, CRC, Sescon, e outros portais técnicos.
 Ignore redes sociais, blogs pessoais, Wikipédia e sites não especializados.
@@ -225,6 +247,9 @@ Descrição: {contexto.get('cnae_descricao', '')}
 
 ## Correlação do Serviço (LC 116/2003, NBS, CSN)
 {contexto.get('correlacao_formatada', 'Não disponível')}
+
+## Classificação Fiscal Detalhada
+{contexto.get('classificacao_fiscal', 'Não disponível')}
 
 ## Valor do Serviço
 R$ {contexto.get('valor', 0):.2f}
