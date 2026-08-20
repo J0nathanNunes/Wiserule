@@ -1,5 +1,6 @@
 """Integração com a API Geranet para consulta e emissão de NFSe no padrão nacional."""
 
+import base64
 import logging
 from typing import Optional
 from pathlib import Path
@@ -25,6 +26,37 @@ def arquivo_para_hexadecimal(caminho_arquivo: str) -> str:
     return Path(caminho_arquivo).read_bytes().hex()
 
 
+def _obter_certificado_hex() -> str:
+    """
+    Obtém o certificado digital em hexadecimal automaticamente.
+
+    Prioridade:
+    1. GERANET_CERT_BASE64 (env) — útil no Railway
+    2. GERANET_CERT_PATH (caminho do .pfx) — uso local
+
+    Returns:
+        String hexadecimal do certificado
+
+    Raises:
+        ValueError: Se nenhuma fonte estiver configurada
+    """
+    if settings.GERANET_CERT_BASE64:
+        logger.info("Carregando certificado via GERANET_CERT_BASE64")
+        return base64.b64decode(settings.GERANET_CERT_BASE64).hex()
+
+    if settings.GERANET_CERT_PATH:
+        caminho = settings.GERANET_CERT_PATH
+        if not Path(caminho).exists():
+            raise ValueError(f"Certificado não encontrado: {caminho}")
+        logger.info("Carregando certificado de: %s", caminho)
+        return Path(caminho).read_bytes().hex()
+
+    raise ValueError(
+        "Nenhum certificado configurado. Defina GERANET_CERT_BASE64 ou "
+        "GERANET_CERT_PATH no .env"
+    )
+
+
 def _headers() -> dict:
     """Headers padrão para requisições à Geranet."""
     return {
@@ -38,8 +70,8 @@ def consultar_notas(
     inscricao_municipal: str,
     razao_social: str,
     municipio: str,
-    certificado_digital: str,
-    senha_certificado: str,
+    certificado_digital: Optional[str] = None,
+    senha_certificado: Optional[str] = None,
     ultimo_nsu: str = "0",
     chave_nfse: Optional[str] = None,
     timeout: int = 30,
@@ -54,8 +86,10 @@ def consultar_notas(
         inscricao_municipal: Inscrição municipal do prestador
         razao_social: Razão social do prestador
         municipio: Código IBGE do município (7 dígitos)
-        certificado_digital: Conteúdo do certificado A1 em hexadecimal
-        senha_certificado: Senha do certificado A1
+        certificado_digital: Conteúdo do certificado A1 em hexadecimal.
+                            Se None, carrega automaticamente das configs.
+        senha_certificado: Senha do certificado A1.
+                          Se None, usa GERANET_CERT_PASSWORD do .env.
         ultimo_nsu: NSU para paginação (0 para começar)
         chave_nfse: Chave DF-e específica para consulta direta (opcional)
         timeout: Timeout em segundos
@@ -70,6 +104,16 @@ def consultar_notas(
     if not settings.GERANET_API_KEY:
         raise ValueError("GERANET_API_KEY não configurada no .env")
 
+    # Carrega certificado automaticamente se não fornecido
+    hex_cert = certificado_digital if certificado_digital else _obter_certificado_hex()
+    senha = senha_certificado if senha_certificado else settings.GERANET_CERT_PASSWORD
+
+    if not senha:
+        raise ValueError(
+            "Senha do certificado não informada. Envie 'senha_certificado' ou "
+            "configure GERANET_CERT_PASSWORD no .env"
+        )
+
     payload = {
         "prestador": {
             "cnpj": cnpj,
@@ -77,8 +121,8 @@ def consultar_notas(
             "razaoSocial": razao_social,
             "municipio": municipio,
         },
-        "certificadoDigital": certificado_digital,
-        "senhaCertificadoDigital": senha_certificado,
+        "certificadoDigital": hex_cert,
+        "senhaCertificadoDigital": senha,
         "padraoNacional": "sim",
         "ultimoNsu": ultimo_nsu,
     }

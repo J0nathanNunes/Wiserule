@@ -34,6 +34,13 @@ class Settings:
     # Geranet (API NFSe)
     GERANET_API_KEY: str = os.getenv("GERANET_API_KEY", "")
 
+    # Certificado digital A1 (.pfx) para Geranet
+    # LOCAL:  coloque o caminho do arquivo .pfx
+    # RAILWAY: converta para base64 e coloque aqui
+    GERANET_CERT_PATH: str = os.getenv("GERANET_CERT_PATH", "")
+    GERANET_CERT_BASE64: str = os.getenv("GERANET_CERT_BASE64", "")
+    GERANET_CERT_PASSWORD: str = os.getenv("GERANET_CERT_PASSWORD", "")
+
     # MinhaReceita
     MINHA_RECEITA_URL: str = "https://minhareceita.org"
 

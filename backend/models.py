@@ -97,8 +97,8 @@ class GeranetConsultaRequest(BaseModel):
     inscricao_municipal: str = Field(..., description="Inscrição municipal do prestador")
     razao_social: str = Field(..., description="Razão social do prestador")
     municipio: str = Field(..., description="Código IBGE do município (7 dígitos)", min_length=7, max_length=7)
-    certificado_digital: str = Field(..., description="Certificado A1 em hexadecimal")
-    senha_certificado: str = Field(..., description="Senha do certificado A1")
+    certificado_digital: Optional[str] = Field(None, description="Certificado A1 em hexadecimal. Se omitido, carrega do .env")
+    senha_certificado: Optional[str] = Field(None, description="Senha do certificado A1. Se omitida, usa GERANET_CERT_PASSWORD do .env")
     ultimo_nsu: str = Field("0", description="NSU para paginação")
     chave_nfse: Optional[str] = Field(None, description="Chave DF-e para consulta específica")
 
