@@ -143,42 +143,6 @@ def classificar_cota_patronal(
                      f"O MEI já recolhe 5% via DAS-MEI.",
         "base_legal": "LC 123/2006, art. 18, §5-C",
     }
-        }
-    
-    # Prestador optante SN → INSS não é retido separadamente (já está no DAS)
-    if simples_nacional_prestador:
-        return {
-            "aliquota": 0,
-            "valor_reter": 0,
-            "reter": False,
-            "base_legal": "LC 123/2006, art. 13 c/c art. 18",
-            "observacao": "Prestador optante Simples Nacional - INSS já incluído no DAS. Não há retenção de cota patronal.",
-            "recolhimento": "incluido_no_das",
-        }
-    
-    # Verifica se é construção civil (CNAEs 41xx a 43xx)
-    cnae_limpo = "".join(filter(str.isdigit, str(cnae_servico)))
-    eh_construcao = cnae_limpo.startswith(("41", "42", "43")) if cnae_limpo else False
-    
-    if eh_construcao:
-        return {
-            "aliquota": 11.0,
-            "valor_reter": round(valor_servico * 0.11, 2),
-            "reter": True,
-            "base_legal": "Art. 31 Lei 8.212/91 c/c IN RFB 2.110/2022 (construção civil)",
-            "observacao": f"Construção civil - reter 11% sobre R$ {valor_servico:.2f} = R$ {valor_servico * 0.11:.2f}",
-            "recolhimento": "reter_11",
-        }
-    
-    # Regra geral para serviços
-    return {
-        "aliquota": 11.0,
-        "valor_reter": round(valor_servico * 0.11, 2),
-        "reter": True,
-        "base_legal": "Art. 31 Lei 8.212/91 c/c IN RFB 2.110/2022",
-        "observacao": f"Reter 11% sobre R$ {valor_servico:.2f} = R$ {valor_servico * 0.11:.2f}",
-        "recolhimento": "reter_11",
-    }
 
 
 # ============================================
