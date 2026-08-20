@@ -78,16 +78,47 @@ def _carregar_certs_json() -> dict[str, str]:
         return {}
 
 
+def _carregar_certs_individuais() -> dict[str, str]:
+    """
+    Carrega certificados de variáveis individuais no formato GERANET_CERT_{CNPJ}.
+
+    Exemplo: GERANET_CERT_07121135000316 = base64 do certificado
+
+    Railway permite até 32KB por variável (~11KB cada certificado em base64).
+    Muito mais seguro que um JSON gigante.
+
+    Returns:
+        Dict {cnpj: hex do certificado}
+    """
+    import os
+
+    certs: dict[str, str] = {}
+    prefixo = "GERANET_CERT_"
+    for chave, valor in os.environ.items():
+        if chave.startswith(prefixo) and valor:
+            cnpj = chave[len(prefixo):]
+            # Valida que tem 14 dígitos (CNPJ)
+            if len(cnpj) == 14 and cnpj.isdigit():
+                try:
+                    hex_cert = base64.b64decode(valor).hex()
+                    certs[cnpj] = hex_cert
+                    logger.debug("Certificado carregado via env %s", chave)
+                except Exception as e:
+                    logger.error("Erro ao decodificar %s: %s", chave, e)
+    return certs
+
+
 def _obter_certificado_hex(cnpj: str | None = None) -> str:
     """
     Obtém o certificado digital em hexadecimal para o CNPJ informado.
 
     Ordem de busca:
     1. Cache interno
-    2. GERANET_CERTS_JSON (Railway - multi-cert)
-    3. Certificados locais (pasta certificados/)
-    4. GERANET_CERT_BASE64 (Railway - certificado único)
-    5. GERANET_CERT_PATH (local - certificado único)
+    2. GERANET_CERTS_JSON (Railway - multi-cert JSON)
+    3. GERANET_CERT_{CNPJ} (Railway - variável individual)
+    4. Certificados locais (pasta certificados/)
+    5. GERANET_CERT_BASE64 (Railway - certificado único)
+    6. GERANET_CERT_PATH (local - certificado único)
 
     Args:
         cnpj: CNPJ do prestador (apenas números, 14 dígitos).
@@ -111,7 +142,15 @@ def _obter_certificado_hex(cnpj: str | None = None) -> str:
         _cert_cache[cnpj] = certs_json[cnpj]
         return certs_json[cnpj]
 
-    # 3. Certificados locais
+    # 3. Variável individual GERANET_CERT_{CNPJ} (Railway)
+    if cnpj:
+        certs_indiv = _carregar_certs_individuais()
+        if cnpj in certs_indiv:
+            logger.info("Carregando certificado via GERANET_CERT_%s", cnpj)
+            _cert_cache[cnpj] = certs_indiv[cnpj]
+            return certs_indiv[cnpj]
+
+    # 4. Certificados locais
     certs_locais = _listar_certificados_locais()
     if cnpj and cnpj in certs_locais:
         caminho = certs_locais[cnpj]
