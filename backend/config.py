@@ -1,9 +1,19 @@
 """Configurações centralizadas do Wiserule."""
 
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 
-load_dotenv()
+# Carrega .env de múltiplos locais possíveis
+_env_paths = [
+    Path(".env"),                                    # CWD
+    Path(__file__).parent / ".env",                  # junto do config.py
+    Path(__file__).parent.parent / "backend" / ".env", # raiz do projeto
+]
+for p in _env_paths:
+    if p.exists():
+        load_dotenv(p)
+        break
 
 
 class Settings:
