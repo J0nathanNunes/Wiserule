@@ -63,8 +63,74 @@ async def health_check():
             "tavily": bool(settings.TAVILY_API_KEY),
             "brave": bool(settings.BRAVE_API_KEY),
             "supabase": bool(settings.SUPABASE_URL and settings.SUPABASE_KEY),
+            "geranet": bool(settings.GERANET_API_KEY),
         },
     }
+
+
+@app.get("/health/detalhado")
+async def health_detalhado():
+    """Endpoint detalhado que testa cada API individualmente."""
+    import requests
+    
+    resultados = {
+        "app": settings.APP_NAME,
+        "timestamp": __import__("datetime").datetime.now().isoformat(),
+        "apis": {},
+    }
+
+    # 1. OpenRouter
+    try:
+        r = requests.get("https://openrouter.ai/api/v1/auth/key", headers={"Authorization": f"Bearer {settings.OPENROUTER_API_KEY}"}, timeout=5)
+        resultados["apis"]["openrouter"] = {"status": "online" if r.status_code == 200 else "erro", "configurada": bool(settings.OPENROUTER_API_KEY)}
+    except Exception as e:
+        resultados["apis"]["openrouter"] = {"status": "offline", "configurada": bool(settings.OPENROUTER_API_KEY), "erro": str(e)}
+
+    # 2. MinhaReceita
+    try:
+        r = requests.get("https://minhareceita.org/00000000000191", timeout=5)
+        resultados["apis"]["minhareceita"] = {"status": "online" if r.status_code == 200 else "erro"}
+    except Exception as e:
+        resultados["apis"]["minhareceita"] = {"status": "offline", "erro": str(e)}
+
+    # 3. Supabase
+    try:
+        from supabase import create_client
+        if settings.SUPABASE_URL and settings.SUPABASE_KEY:
+            client = create_client(settings.SUPABASE_URL, settings.SUPABASE_KEY)
+            r = client.table(settings.SUPABASE_TABLE_ANALISES).select("id").limit(1).execute()
+            resultados["apis"]["supabase"] = {"status": "online", "configurada": True}
+        else:
+            resultados["apis"]["supabase"] = {"status": "nao_configurada", "configurada": False}
+    except Exception as e:
+        resultados["apis"]["supabase"] = {"status": "offline", "configurada": bool(settings.SUPABASE_URL and settings.SUPABASE_KEY), "erro": str(e)}
+
+    # 4. Tavily
+    try:
+        from tavily import TavilyClient
+        if settings.TAVILY_API_KEY:
+            client = TavilyClient(api_key=settings.TAVILY_API_KEY)
+            r = client.search(query="teste", max_results=1)
+            resultados["apis"]["tavily"] = {"status": "online", "configurada": True}
+        else:
+            resultados["apis"]["tavily"] = {"status": "nao_configurada", "configurada": False}
+    except Exception as e:
+        resultados["apis"]["tavily"] = {"status": "offline", "configurada": bool(settings.TAVILY_API_KEY), "erro": str(e)}
+
+    # 5. Geranet
+    try:
+        if settings.GERANET_API_KEY:
+            r = requests.get("https://nfe.geranet.net/api/v1/", headers={"Authorization": f"Bearer {settings.GERANET_API_KEY}"}, timeout=5)
+            resultados["apis"]["geranet"] = {"status": "online" if r.status_code < 500 else "erro", "configurada": True, "http_status": r.status_code}
+        else:
+            resultados["apis"]["geranet"] = {"status": "nao_configurada", "configurada": False}
+    except Exception as e:
+        resultados["apis"]["geranet"] = {"status": "offline", "configurada": bool(settings.GERANET_API_KEY), "erro": str(e)}
+
+    # 6. Backend (ele mesmo)
+    resultados["apis"]["backend"] = {"status": "online", "versao": "1.0.0"}
+
+    return resultados
 
 
 @app.post("/analisar", response_model=AnaliseResponse)

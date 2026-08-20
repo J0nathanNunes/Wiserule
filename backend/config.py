@@ -31,6 +31,9 @@ class Settings:
     SUPABASE_TABLE_ANALISES: str = os.getenv("SUPABASE_TABLE_ANALISES", "analises")
     SUPABASE_TABLE_CORRELACAO: str = os.getenv("SUPABASE_TABLE_CORRELACAO", "v_correlacao_completa")
 
+    # Geranet (API NFSe)
+    GERANET_API_KEY: str = os.getenv("GERANET_API_KEY", "")
+
     # MinhaReceita
     MINHA_RECEITA_URL: str = "https://minhareceita.org"
 

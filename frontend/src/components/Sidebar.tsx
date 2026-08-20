@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import StatusModal from './StatusModal';
 
 type FormData = {
   cnpj: string;
@@ -28,6 +29,9 @@ export default function Sidebar({ isOpen, onToggle, onSubmit, isLoading, onNovaA
   });
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [statusModalOpen, setStatusModalOpen] = useState(false);
+  const [statusApis, setStatusApis] = useState<any>(null);
+  const [statusLoading, setStatusLoading] = useState(false);
 
   const handleChange = (field: keyof FormData, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -233,17 +237,39 @@ export default function Sidebar({ isOpen, onToggle, onSubmit, isLoading, onNovaA
         </button>
       </form>
 
-      {/* Footer */}
+      {/* Status Button */}
       <div className="p-4 border-t border-slate-700">
-        <div className="text-[10px] text-slate-600 leading-relaxed">
-          <p className="font-medium text-slate-500 mb-1">APIs Integradas:</p>
-          <ul className="space-y-0.5">
-            <li>✅ MinhaReceita.org (CNPJ)</li>
-            <li>📡 LegisWeb (Correlação)</li>
-            <li>🔍 Tavily (Busca Online)</li>
-            <li>🧠 OpenRouter (LLM + OCR)</li>
-          </ul>
-        </div>
+        <button
+          onClick={async () => {
+            setStatusModalOpen(true);
+            setStatusLoading(true);
+            setStatusApis(null);
+            try {
+              const res = await fetch('/api/health/detalhado');
+              const data = await res.json();
+              setStatusApis(data);
+            } catch (err) {
+              setStatusApis({ backend: { status: 'offline', erro: 'Não foi possível conectar ao servidor' } });
+            } finally {
+              setStatusLoading(false);
+            }
+          }}
+          className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-slate-700/50 text-slate-400 rounded-lg hover:bg-slate-700 hover:text-white transition-all text-xs"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+          </svg>
+          📡 Status das APIs
+        </button>
+      </div>
+
+      {/* Status Modal */}
+      <StatusModal
+        isOpen={statusModalOpen}
+        onClose={() => setStatusModalOpen(false)}
+        apis={statusApis?.apis}
+        loading={statusLoading}
+      />
       </div>
     </div>
   );
