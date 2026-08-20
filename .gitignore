@@ -8,3 +8,6 @@ __pycache__/
 data/
 uploads/
 .DS_Store
+# Certificados digitais
+backend/certificados/
+*.pfx
