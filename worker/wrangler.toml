@@ -7,7 +7,7 @@ compatibility_flags = ["nodejs_compat"]
 [[d1_databases]]
 binding = "DB"
 database_name = "wiserule-db"
-database_id = "REEMPLAZAR_CON_DATABASE_ID"
+database_id = "dd68bb09-6e33-4113-b2f9-66e46449ab1c"
 
 # Durable Object para tareas asíncronas
 [[durable_objects.bindings]]
