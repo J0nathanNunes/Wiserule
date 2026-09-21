@@ -1,9 +1,0 @@
-name = "wiserule-frontend"
-compatibility_date = "2024-09-23"
-
-# Configuración de Cloudflare Pages
-pages_build_output_dir = "out"
-
-# Variables de entorno para el build
-[vars]
-NEXT_PUBLIC_API_URL = "https://wiserule-worker.workers.dev"
