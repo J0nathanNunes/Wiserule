@@ -41,9 +41,7 @@ app.get('/api/health', (c) => {
     app: env.APP_NAME || 'Wiserule',
     apis_configured: {
       openrouter: Boolean(env.OPENROUTER_API_KEY),
-      legisweb: Boolean(env.LEGISWEB_TOKEN),
       tavily: Boolean(env.TAVILY_API_KEY),
-      brave: Boolean(env.BRAVE_API_KEY),
       geranet: Boolean(env.GERANET_API_KEY),
       d1: Boolean(env.DB),
     },

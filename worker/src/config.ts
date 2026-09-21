@@ -9,10 +9,7 @@ export interface Env {
 
   // Secrets (configurados en el dashboard de Cloudflare)
   OPENROUTER_API_KEY?: string;
-  LEGISWEB_TOKEN?: string;
-  LEGISWEB_CODIGO_CLIENTE?: string;
   TAVILY_API_KEY?: string;
-  BRAVE_API_KEY?: string;
   GERANET_API_KEY?: string;
   GERANET_CERT_PASSWORD?: string;
   GERANET_CERTS_JSON?: string;
@@ -21,7 +18,6 @@ export interface Env {
   APP_NAME?: string;
   MINHA_RECEITA_URL?: string;
   OPENROUTER_BASE_URL?: string;
-  LEGISWEB_BASE_URL?: string;
   GERANET_BASE_URL?: string;
   MAX_FILE_SIZE_MB?: string;
   MODELO_OCR?: string;
@@ -35,7 +31,6 @@ export function getConfig(env: Env) {
     appName: env.APP_NAME || 'Wiserule',
     minhaReceitaUrl: env.MINHA_RECEITA_URL || 'https://minhareceita.org',
     openrouterBaseUrl: env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1',
-    legiswebBaseUrl: env.LEGISWEB_BASE_URL || 'https://www.legisweb.com.br/api/correlacoes_servicos/',
     geranetBaseUrl: env.GERANET_BASE_URL || 'https://nfe.geranet.net/api/v1',
     maxFileSizeMb: parseInt(env.MAX_FILE_SIZE_MB || '5', 10),
     modeloOcr: env.MODELO_OCR || 'openai/gpt-4o-mini',

@@ -1,5 +1,5 @@
 /**
- * Búsqueda online usando Tavily (con fallback Brave Search).
+ * Búsqueda online usando Tavily.
  * Equivalente a backend/busca_online.py en Python.
  */
 
@@ -58,11 +58,7 @@ function filtrarResultadosConfiable(resultados: ResultadoBusca[]): ResultadoBusc
 
 export async function buscarOnline(pergunta: string, env: Env): Promise<ResultadoBusca[]> {
   if (env.TAVILY_API_KEY) {
-    const res = await buscarTavily(pergunta, env.TAVILY_API_KEY);
-    if (res.length > 0) return res;
-  }
-  if (env.BRAVE_API_KEY) {
-    return buscarBrave(pergunta, env.BRAVE_API_KEY);
+    return buscarTavily(pergunta, env.TAVILY_API_KEY);
   }
   return [];
 }
@@ -87,30 +83,6 @@ async function buscarTavily(pergunta: string, apiKey: string): Promise<Resultado
       title: item.title || '',
       url: item.url || '',
       content: item.raw_content || item.content || '',
-    }));
-
-    return filtrarResultadosConfiable(resultados);
-  } catch {
-    return [];
-  }
-}
-
-async function buscarBrave(pergunta: string, apiKey: string): Promise<ResultadoBusca[]> {
-  try {
-    const url = `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(pergunta)}&count=5`;
-    const res = await fetch(url, {
-      headers: {
-        Accept: 'application/json',
-        'X-Subscription-Token': apiKey,
-      },
-    });
-    if (!res.ok) return [];
-    const data = await res.json();
-
-    const resultados: ResultadoBusca[] = (data.web?.results || []).map((item: Record<string, unknown>) => ({
-      title: item.title || '',
-      url: item.url || '',
-      content: item.description || '',
     }));
 
     return filtrarResultadosConfiable(resultados);

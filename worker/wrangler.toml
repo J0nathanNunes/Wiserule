@@ -23,7 +23,6 @@ new_sqlite_classes = ["TareaAnalisis"]
 APP_NAME = "Wiserule"
 MINHA_RECEITA_URL = "https://minhareceita.org"
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
-LEGISWEB_BASE_URL = "https://www.legisweb.com.br/api/correlacoes_servicos/"
 GERANET_BASE_URL = "https://nfe.geranet.net/api/v1"
 MAX_FILE_SIZE_MB = "5"
 MODELO_OCR = "openai/gpt-4o-mini"
@@ -33,6 +32,6 @@ MODELO_VISAO = "openai/gpt-4o-mini"
 # CORS
 CORS_ORIGINS = "https://wiserule.com,https://www.wiserule.com,http://localhost:3000"
 
-# NOTA: Las claves secretas (OPENROUTER_API_KEY, LEGISWEB_TOKEN, etc.)
+# NOTA: Las claves secretas (OPENROUTER_API_KEY, TAVILY_API_KEY, GERANET_API_KEY, etc.)
 # se configuran en el dashboard de Cloudflare > Workers > Settings > Variables
 # como "Secrets", NO en este archivo.
