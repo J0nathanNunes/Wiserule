@@ -1,0 +1,16 @@
+# Dependencias
+node_modules/
+dist/
+.wrangler/
+
+# Archivos de entorno
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+wrangler-*.log
+
+# Build
+build/

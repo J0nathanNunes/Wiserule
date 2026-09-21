@@ -1,0 +1,38 @@
+name = "wiserule-worker"
+main = "src/index.ts"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+
+# D1 Database binding
+[[d1_databases]]
+binding = "DB"
+database_name = "wiserule-db"
+database_id = "REEMPLAZAR_CON_DATABASE_ID"
+
+# Durable Object para tareas asíncronas
+[[durable_objects.bindings]]
+name = "TAREA_ANALISIS"
+class_name = "TareaAnalisis"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["TareaAnalisis"]
+
+# Variables de entorno (no secretas)
+[vars]
+APP_NAME = "Wiserule"
+MINHA_RECEITA_URL = "https://minhareceita.org"
+OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+LEGISWEB_BASE_URL = "https://www.legisweb.com.br/api/correlacoes_servicos/"
+GERANET_BASE_URL = "https://nfe.geranet.net/api/v1"
+MAX_FILE_SIZE_MB = "5"
+MODELO_OCR = "openai/gpt-4o-mini"
+MODELO_ANALISE = "openai/gpt-4o-mini"
+MODELO_VISAO = "openai/gpt-4o-mini"
+
+# CORS
+CORS_ORIGINS = "https://wiserule.com,https://www.wiserule.com,http://localhost:3000"
+
+# NOTA: Las claves secretas (OPENROUTER_API_KEY, LEGISWEB_TOKEN, etc.)
+# se configuran en el dashboard de Cloudflare > Workers > Settings > Variables
+# como "Secrets", NO en este archivo.

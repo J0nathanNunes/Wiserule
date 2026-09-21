@@ -245,7 +245,7 @@ export default function Sidebar({ isOpen, onToggle, onSubmit, isLoading, onNovaA
             setStatusLoading(true);
             setStatusApis(null);
             try {
-              const res = await fetch('/api/diagnostico');
+              const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || ''}/api/diagnostico`);
               const data = await res.json();
               setStatusApis(data);
             } catch (err) {

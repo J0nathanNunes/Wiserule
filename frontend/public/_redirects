@@ -1,2 +1,0 @@
-# Redireciona /api/* para o backend no Railway
-/api/*  https://wiserule-production.up.railway.app/:splat  200

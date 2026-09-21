@@ -56,7 +56,10 @@ Sou um assistente especializado em análise de Notas Fiscais de Serviço. Posso 
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const API_BASE = '/api';
+  // En producción usa la URL del Worker; en dev usa el proxy local
+  const API_BASE = process.env.NEXT_PUBLIC_API_URL
+    ? `${process.env.NEXT_PUBLIC_API_URL}/api`
+    : '/api';
 
   // Polling: acompanha o progresso da tarefa
   const pollTask = async (taskId: string, assistantMsgId: string) => {

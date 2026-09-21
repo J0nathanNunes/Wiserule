@@ -11,3 +11,8 @@ uploads/
 # Certificados digitais
 backend/certificados/
 *.pfx
+# Cloudflare Worker
+worker/node_modules/
+worker/dist/
+worker/.wrangler/
+.wrangler/
