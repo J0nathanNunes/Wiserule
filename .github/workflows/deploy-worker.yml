@@ -39,5 +39,5 @@ jobs:
 
       - name: Verify Worker health
         run: |
-          echo "Testing https://wiserule-worker.nunes-jonathan.workers.dev/api/health"
-          curl -s -w "\nHTTP_CODE:%{http_code}\n" "https://wiserule-worker.nunes-jonathan.workers.dev/api/health"
+          echo "Testing https://wiserule.nunes-jonathan.workers.dev/api/health"
+          curl -s -w "\nHTTP_CODE:%{http_code}\n" "https://wiserule.nunes-jonathan.workers.dev/api/health"
