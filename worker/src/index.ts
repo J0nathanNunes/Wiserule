@@ -208,7 +208,7 @@ app.post('/api/analisar', async (c) => {
 
           await doObj.fetch(`https://tarea/${id}/actualizar`, {
             method: 'POST',
-            body: JSON.stringify({ status: 'concluido', progreso: 100, etapa_actual: 'An+�lisis concluida.', relatorio_completo: relatorio }),
+            body: JSON.stringify({ status: 'concluido', progreso: 100, etapa_actual: 'Análise concluída.', relatorio_completo: relatorio }),
           });
         } catch (e) {
           await doObj.fetch(`https://tarea/${id}/actualizar`, {
