@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import ChatMessage from '@/components/ChatMessage';
 import ChatInput from '@/components/ChatInput';
 import Sidebar from '@/components/Sidebar';
+import DebugModal from '@/components/DebugModal';
 
 type Message = {
   id: string;
@@ -48,6 +49,7 @@ Sou um assistente especializado em análise de Notas Fiscais de Serviço. Posso 
   const [isLoading, setIsLoading] = useState(false);
   const [statusMsg, setStatusMsg] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [debugOpen, setDebugOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -322,6 +324,15 @@ Envie os dados da NFSe que desejo ajudar.`,
           <span className="text-xs text-slate-500 bg-slate-700 px-2 py-0.5 rounded-full ml-2">
             Análise Fiscal Inteligente
           </span>
+
+          {/* Debug Button */}
+          <button
+            onClick={() => setDebugOpen(true)}
+            className="ml-auto text-xs text-amber-400 bg-slate-700/50 px-3 py-1.5 rounded-lg hover:bg-slate-700 hover:text-amber-300 transition-all border border-slate-600/50"
+            title="Abrir debug"
+          >
+            🔍 Debug
+          </button>
         </header>
 
         {/* Messages */}
@@ -362,6 +373,12 @@ Envie os dados da NFSe que desejo ajudar.`,
           isLoading={isLoading}
         />
       </div>
+
+      {/* Debug Modal */}
+      <DebugModal
+        isOpen={debugOpen}
+        onClose={() => setDebugOpen(false)}
+      />
     </div>
   );
 }
