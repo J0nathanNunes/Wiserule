@@ -26,18 +26,17 @@ function normalizarEncoding(texto: string): string {
 
   // Mapeamento manual de caracteres corrompidos comuns
   const mapa: Record<string, string> = {
-    '├í': 'í', '├¡': 'í', '├│': 'ó', '├│': 'ó',
+    '├í': 'í', '├¡': 'í', '├│': 'ó',
     '├ú': 'ú', '├║': 'ú', '├é': 'é', '├ë': 'ë',
     '├â': 'â', '├Á': 'Á', '├É': 'É', '├Í': 'Í',
     '├Ó': 'Ó', '├Ú': 'Ú', '├ç': 'ç', '├Ç': 'Ç',
-    '├úo': 'ção', '├úes': 'ções', '├úes': 'ções',
+    '├úo': 'ção', '├úes': 'ções',
     '├¡vel': 'ível', '├¡veis': 'íveis',
-    '├úes': 'ções', '├úo': 'ção',
     'T├®cnico': 'Técnico', 'T├®cnico-Jur├¡dico': 'Técnico-Jurídico',
     'Jur├¡dico': 'Jurídico', 'An├ílise': 'Análise',
     'conclu├¡da': 'concluída', 'conclu├¡do': 'concluído',
     '├ü': 'Á', '├ô': 'Ô', '├û': 'Û', '├ê': 'Ê',
-    '├¬': 'Ã', '├¡': 'í', '├í': 'í',
+    '├¬': 'Ã',
     'Ô£à': '✅', 'ƒôï': '📋', 'ƒÅó': '🏢',
     'ƒøá´©Å': '🛠️', 'ÔÜû´©Å': '⚖️', 'ƒº«': '🧮',
     'ƒôì': '📍', 'ƒöó': '🔢', 'ƒº¥': '🧾',
