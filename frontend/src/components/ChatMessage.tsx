@@ -12,44 +12,8 @@ type MessageProps = {
   };
 };
 
-/**
- * Corrige encoding corrompido (mojibake).
- * El texto fue UTF-8 pero fue interpretado como Latin-1 (cada byte se volvió un char).
- * Para corregirlo: tomamos cada char como byte Latin-1 y decodificamos como UTF-8.
- */
-function normalizarEncoding(texto: string): string {
-  if (!texto) return texto;
-
-  // Verifica si hay caracteres que sugieren mojibake (bytes >= 0x80)
-  const temBytesAltos = /[\u0080-\u00FF]/.test(texto);
-  if (!temBytesAltos) return texto;
-
-  try {
-    // Convierte cada char a su byte Latin-1
-    const bytes = new Uint8Array(texto.length);
-    for (let i = 0; i < texto.length; i++) {
-      bytes[i] = texto.charCodeAt(i) & 0xff;
-    }
-
-    // Decodifica como UTF-8
-    const decoder = new TextDecoder('utf-8', { fatal: false });
-    const decodificado = decoder.decode(bytes);
-
-    // Si no hay caracteres de reemplazo (\uFFFD), el decoding fue exitoso
-    if (!decodificado.includes('\uFFFD')) {
-      return decodificado;
-    }
-  } catch {
-    // Si falla, usa el texto original
-  }
-
-  return texto;
-}
-
 export default function ChatMessage({ message }: MessageProps) {
   const isUser = message.role === 'user';
-  // Normaliza el encoding antes de renderizar
-  const contenido = isUser ? message.content : normalizarEncoding(message.content);
 
   return (
     <div className={`flex items-start gap-3 ${isUser ? 'flex-row-reverse' : ''}`}>
@@ -73,11 +37,11 @@ export default function ChatMessage({ message }: MessageProps) {
         }`}
       >
         {isUser ? (
-          <p className="whitespace-pre-wrap text-sm leading-relaxed">{contenido}</p>
+          <p className="whitespace-pre-wrap text-sm leading-relaxed">{message.content}</p>
         ) : (
           <div className="markdown-body text-sm leading-relaxed">
             <ReactMarkdown remarkPlugins={[remarkGfm]}>
-              {contenido}
+              {message.content}
             </ReactMarkdown>
           </div>
         )}
