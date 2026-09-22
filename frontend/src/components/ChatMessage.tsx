@@ -12,8 +12,24 @@ type MessageProps = {
   };
 };
 
+/**
+ * Detecta se o texto tem encoding corrompido (caracteres UTF-8 mal interpretados como Latin-1).
+ * Se detectar, renderiza como texto simples para evitar que o ReactMarkdown falhe.
+ */
+function temEncodingCorrompido(texto: string): boolean {
+  // Padrões comuns de encoding corrompido
+  const padroes = [
+    /├[í¡ú║éëâÁÉÍÓÚçÇ]/,  // Caracteres acentuados corrompidos
+    /ƒ[ôÅøöÆ]/,            // Emojis e símbolos corrompidos
+    /Ô[£Üå]/,               // Símbolos corrompidos
+    /┬║/,                   // Caracteres específicos corrompidos
+  ];
+  return padroes.some((p) => p.test(texto));
+}
+
 export default function ChatMessage({ message }: MessageProps) {
   const isUser = message.role === 'user';
+  const temCorrupcao = !isUser && temEncodingCorrompido(message.content);
 
   return (
     <div className={`flex items-start gap-3 ${isUser ? 'flex-row-reverse' : ''}`}>
@@ -36,7 +52,7 @@ export default function ChatMessage({ message }: MessageProps) {
             : 'bg-slate-800 rounded-tl-sm border border-slate-700 text-slate-200'
         }`}
       >
-        {isUser ? (
+        {isUser || temCorrupcao ? (
           <p className="whitespace-pre-wrap text-sm leading-relaxed">{message.content}</p>
         ) : (
           <div className="markdown-body text-sm leading-relaxed">
