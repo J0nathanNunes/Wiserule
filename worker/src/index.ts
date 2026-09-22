@@ -17,6 +17,37 @@ import { TareaAnalisis, generarTaskId } from './tarefas';
 
 export { TareaAnalisis };
 
+/**
+ * Normaliza encoding de texto que pode ter sido corrompido por encoding duplo.
+ * Converte sequências como "├í" de volta para "í".
+ */
+function normalizarEncoding(texto: string): string {
+  if (!texto) return texto;
+
+  // Mapeamento de sequências corrompidas comuns (UTF-8 mal interpretado como Latin-1)
+  const correcoes: Record<string, string> = {
+    '├í': 'í', '├¡': 'í', '├│': 'ó', '├│': 'ó',
+    '├ú': 'ú', '├║': 'ú', '├é': 'é', '├ë': 'ë',
+    '├â': 'â', '├úo': 'ção', '├úes': 'ções',
+    '├¡vel': 'ível', '├¡veis': 'íveis',
+    'T├®cnico': 'Técnico', 'Jur├¡dico': 'Jurídico',
+    'An├ílise': 'Análise', 'conclu├¡da': 'concluída',
+    '├ü': 'Á', '├ç': 'ç', '├Ç': 'Ç',
+    '├ô': 'Ô', '├û': 'Û', '├ê': 'Ê',
+    'Ô£à': '✅', 'ƒôï': '📋', 'ƒÅó': '🏢',
+    'ƒøá´©Å': '🛠️', 'ÔÜû´©Å': '⚖️', 'ƒº«': '🧮',
+    'ƒôì': '📍', 'ƒöó': '🔢', 'ƒº¥': '🧾',
+    'ƒÆ¼': '💬', 'ƒôï': '📋',
+  };
+
+  let resultado = texto;
+  for (const [corrompido, correto] of Object.entries(correcoes)) {
+    resultado = resultado.split(corrompido).join(correto);
+  }
+
+  return resultado;
+}
+
 const app = new Hono<{ Bindings: Env }>();
 
 // CORS
@@ -194,6 +225,9 @@ app.post('/api/analisar', async (c) => {
 
           const relatorio = await generarAnalisis(contexto, config, env.OPENROUTER_API_KEY || '');
 
+          // Normaliza encoding (corrige caracteres corrompidos)
+          const relatorioNormalizado = normalizarEncoding(relatorio);
+
           // Guarda en D1
           if (env.DB) {
             await salvarAnalise(env.DB, {
@@ -202,13 +236,13 @@ app.post('/api/analisar', async (c) => {
               valor,
               cidade,
               uf,
-              resultado: relatorio,
+              resultado: relatorioNormalizado,
             });
           }
 
           await doObj.fetch(`https://tarea/${id}/actualizar`, {
             method: 'POST',
-            body: JSON.stringify({ status: 'concluido', progreso: 100, etapa_actual: 'Análise concluída.', relatorio_completo: relatorio }),
+            body: JSON.stringify({ status: 'concluido', progreso: 100, etapa_actual: 'Análise concluída.', relatorio_completo: relatorioNormalizado }),
           });
         } catch (e) {
           await doObj.fetch(`https://tarea/${id}/actualizar`, {
