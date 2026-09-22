@@ -62,6 +62,12 @@ export class TareaAnalisis implements DurableObject {
       return Response.json(await this.obtener());
     }
 
+    if (request.method === 'POST' && path.endsWith('/inicializar')) {
+      const body = (await request.json()) as { id: string };
+      await this.initialize(body.id);
+      return Response.json(this.tarea);
+    }
+
     if (request.method === 'POST' && path.endsWith('/actualizar')) {
       const body = await request.json();
       const tarea = await this.actualizar(body as Partial<Tarea>);
