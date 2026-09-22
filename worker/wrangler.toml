@@ -30,7 +30,7 @@ MODELO_ANALISE = "openai/gpt-4o-mini"
 MODELO_VISAO = "openai/gpt-4o-mini"
 
 # CORS
-CORS_ORIGINS = "https://wiserule.com,https://www.wiserule.com,http://localhost:3000"
+CORS_ORIGINS = "https://wiserule.com,https://www.wiserule.com,https://wiserule.pages.dev,http://localhost:3000"
 
 # NOTA: Las claves secretas (OPENROUTER_API_KEY, TAVILY_API_KEY, GERANET_API_KEY, etc.)
 # se configuran en el dashboard de Cloudflare > Workers > Settings > Variables
