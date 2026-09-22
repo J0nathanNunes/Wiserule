@@ -36,7 +36,7 @@ function normalizarEncoding(texto: string): string {
     'Jur├¡dico': 'Jurídico', 'An├ílise': 'Análise',
     'conclu├¡da': 'concluída', 'conclu├¡do': 'concluído',
     '├ü': 'Á', '├ô': 'Ô', '├û': 'Û', '├ê': 'Ê',
-    '├¬': 'Ã: '🏢',
+    '├¬': 'Ã',
     'ƒøá´©Å': '🛠️', 'ÔÜû´©Å': '⚖️', 'ƒº«': '🧮',
     'ƒôì': '📍', 'ƒöó': '🔢', 'ƒº¥': '🧾',
     'ƒÆ¼': '💬', 'ÔåÆ': '→',
