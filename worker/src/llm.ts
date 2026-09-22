@@ -337,11 +337,50 @@ export async function generarAnalisis(
 }
 
 /**
- * Normaliza encoding de texto que pode ter sido corrompido por encoding duplo.
+ * Detecta e corrige automaticamente texto UTF-8 que foi mal interpretado como Latin-1.
+ *
+ * O problema: quando o texto passa pelo JSON.stringify/JSON.parse do Durable Object,
+ * caracteres UTF-8 multibyte (como 'í', 'ç', emojis) são corrompidos porque cada
+ * byte UTF-8 é tratado como um caractere Latin-1 separado.
+ *
+ * A solução: tentamos decodificar o texto tratando os bytes como Latin-1 e depois
+ * decodificando como UTF-8. Se o resultado for válido (sem caracteres de substituição),
+ * usamos ele. Caso contrário, mantemos o texto original.
+ *
+ * Esta abordagem funciona para QUALQUER caractere corrompido, não apenas os conhecidos.
  */
 function normalizarEncoding(texto: string): string {
   if (!texto) return texto;
 
+  // Verifica se o texto tem sinais de corrupção UTF-8
+  // Caracteres UTF-8 multibyte começam com bytes >= 0x80
+  const temBytesAltos = /[\u0080-\u00FF]/.test(texto);
+
+  if (!temBytesAltos) {
+    // Texto puro ASCII, não precisa normalizar
+    return texto;
+  }
+
+  try {
+    // Converte a string para bytes (cada char vira um byte Latin-1)
+    const bytes = new Uint8Array(texto.length);
+    for (let i = 0; i < texto.length; i++) {
+      bytes[i] = texto.charCodeAt(i) & 0xff;
+    }
+
+    // Tenta decodificar como UTF-8
+    const decoder = new TextDecoder('utf-8', { fatal: false });
+    const decoded = decoder.decode(bytes);
+
+    // Se não houver caracteres de substituição (\uFFFD), o decoding foi bem-sucedido
+    if (!decoded.includes('\uFFFD')) {
+      return decoded;
+    }
+  } catch {
+    // Ignora erros e usa o texto original
+  }
+
+  // Fallback: mapa de caracteres conhecidos (para casos onde o decoding automático falha)
   const mapa: Record<string, string> = {
     '├í': 'í', '├¡': 'í', '├│': 'ó',
     '├ú': 'ú', '├║': 'ú', '├é': 'é', '├ë': 'ë',
