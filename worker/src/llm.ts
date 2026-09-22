@@ -330,5 +330,40 @@ export async function generarAnalisis(
     },
   ];
   const res = await llamarLlm(mensajes, config, apiKey, config.modeloAnalise, 0.3, 4096);
-  return res.ok ? res.content || '' : `Error generando análisis: ${res.error}`;
+  if (!res.ok) return `Error generando análisis: ${res.error}`;
+
+  // Normaliza encoding (corrige caracteres UTF-8 mal interpretados como Latin-1)
+  return normalizarEncoding(res.content || '');
+}
+
+/**
+ * Normaliza encoding de texto que pode ter sido corrompido por encoding duplo.
+ */
+function normalizarEncoding(texto: string): string {
+  if (!texto) return texto;
+
+  const mapa: Record<string, string> = {
+    '├í': 'í', '├¡': 'í', '├│': 'ó',
+    '├ú': 'ú', '├║': 'ú', '├é': 'é', '├ë': 'ë',
+    '├â': 'â', '├Á': 'Á', '├É': 'É', '├Í': 'Í',
+    '├Ó': 'Ó', '├Ú': 'Ú', '├ç': 'ç', '├Ç': 'Ç',
+    '├úo': 'ção', '├úes': 'ções',
+    '├¡vel': 'ível', '├¡veis': 'íveis',
+    'T├®cnico': 'Técnico', 'T├®cnico-Jur├¡dico': 'Técnico-Jurídico',
+    'Jur├¡dico': 'Jurídico', 'An├ílise': 'Análise',
+    'conclu├¡da': 'concluída', 'conclu├¡do': 'concluído',
+    '├ü': 'Á', '├ô': 'Ô', '├û': 'Û', '├ê': 'Ê',
+    '├¬': 'Ã',
+    'Ô£à': '✅', 'ƒôï': '📋', 'ƒÅó': '🏢',
+    'ƒøá´©Å': '🛠️', 'ÔÜû´©Å': '⚖️', 'ƒº«': '🧮',
+    'ƒôì': '📍', 'ƒöó': '🔢', 'ƒº¥': '🧾',
+    'ƒÆ¼': '💬', 'ÔåÆ': '→',
+  };
+
+  let resultado = texto;
+  for (const [corrompido, correto] of Object.entries(mapa)) {
+    resultado = resultado.split(corrompido).join(correto);
+  }
+
+  return resultado;
 }
