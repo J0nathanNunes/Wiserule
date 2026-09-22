@@ -361,5 +361,5 @@ app.get('/api/diagnostico', (c) => {
 });
 
 export default app;
-// Wiserule Worker - deploy trigger
+
  
