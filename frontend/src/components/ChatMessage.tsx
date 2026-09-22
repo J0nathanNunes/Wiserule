@@ -13,36 +13,37 @@ type MessageProps = {
 };
 
 /**
- * Corrige encoding corrompido (caracteres UTF-8 mal interpretados como Latin-1).
- * Convierte "T├®cnico" → "Técnico", "ƒôï" → "📋", etc.
+ * Corrige encoding corrompido (mojibake).
+ * El texto fue UTF-8 pero fue interpretado como Latin-1 (cada byte se volvió un char).
+ * Para corregirlo: tomamos cada char como byte Latin-1 y decodificamos como UTF-8.
  */
 function normalizarEncoding(texto: string): string {
   if (!texto) return texto;
 
-  const mapa: Record<string, string> = {
-    '├í': 'í', '├¡': 'í', '├│': 'ó',
-    '├ú': 'ú', '├║': 'ú', '├é': 'é', '├ë': 'ë',
-    '├â': 'â', '├Á': 'Á', '├É': 'É', '├Í': 'Í',
-    '├Ó': 'Ó', '├Ú': 'Ú', '├ç': 'ç', '├Ç': 'Ç',
-    '├úo': 'ção', '├úes': 'ções',
-    '├¡vel': 'ível', '├¡veis': 'íveis',
-    'T├®cnico': 'Técnico', 'T├®cnico-Jur├¡dico': 'Técnico-Jurídico',
-    'Jur├¡dico': 'Jurídico', 'An├ílise': 'Análise',
-    'conclu├¡da': 'concluída', 'conclu├¡do': 'concluído',
-    '├ü': 'Á', '├ô': 'Ô', '├û': 'Û', '├ê': 'Ê',
-    '├¬': 'Ã',
-    'Ô£à': '✅', 'ƒôï': '📋', 'ƒÅó': '🏢',
-    'ƒøá´©Å': '🛠️', 'ÔÜû´©Å': '⚖️', 'ƒº«': '🧮',
-    'ƒôì': '📍', 'ƒöó': '🔢', 'ƒº¥': '🧾',
-    'ƒÆ¼': '💬', 'ÔåÆ': '→', 'ÔÇô': '–',
-  };
+  // Verifica si hay caracteres que sugieren mojibake (bytes >= 0x80)
+  const temBytesAltos = /[\u0080-\u00FF]/.test(texto);
+  if (!temBytesAltos) return texto;
 
-  let resultado = texto;
-  for (const [corrompido, correto] of Object.entries(mapa)) {
-    resultado = resultado.split(corrompido).join(correto);
+  try {
+    // Convierte cada char a su byte Latin-1
+    const bytes = new Uint8Array(texto.length);
+    for (let i = 0; i < texto.length; i++) {
+      bytes[i] = texto.charCodeAt(i) & 0xff;
+    }
+
+    // Decodifica como UTF-8
+    const decoder = new TextDecoder('utf-8', { fatal: false });
+    const decodificado = decoder.decode(bytes);
+
+    // Si no hay caracteres de reemplazo (\uFFFD), el decoding fue exitoso
+    if (!decodificado.includes('\uFFFD')) {
+      return decodificado;
+    }
+  } catch {
+    // Si falla, usa el texto original
   }
 
-  return resultado;
+  return texto;
 }
 
 export default function ChatMessage({ message }: MessageProps) {
