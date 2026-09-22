@@ -65,7 +65,7 @@ app.get('/api/health/detalhado', (c) => {
   });
 });
 
-// AnÃ¡lisis de NFSe
+// An+ílisis de NFSe
 app.post('/api/analisar', async (c) => {
   const env = c.env;
   const config = getConfig(env);
@@ -88,7 +88,7 @@ app.post('/api/analisar', async (c) => {
     if (archivo && archivo instanceof File) {
       const bytes = new Uint8Array(await archivo.arrayBuffer());
       if (bytes.length > config.maxFileSizeMb * 1024 * 1024) {
-        return c.json({ status: 'error', error: `Archivo muy grande. MÃ¡ximo: ${config.maxFileSizeMb}MB` }, 413);
+        return c.json({ status: 'error', error: `Archivo muy grande. M+íximo: ${config.maxFileSizeMb}MB` }, 413);
       }
 
       const extension = archivo.name.includes('.')
@@ -134,13 +134,13 @@ app.post('/api/analisar', async (c) => {
     const correlacion = correlacionarPorCnae(empresa.cnae, servico);
     const correlacionFormatada = formatearCorrelacionParaLlm(correlacion);
 
-    // --- FASE 3: BÃºsqueda online ---
+    // --- FASE 3: B+¦squeda online ---
     const cnaeStr = empresa.cnae || servico;
-    const pregunta = `${cnaeStr} ${servico} retenciÃ³n ISS ${cidade} ${uf} LC 116 legislaciÃ³n`;
+    const pregunta = `${cnaeStr} ${servico} retenci+¦n ISS ${cidade} ${uf} LC 116 legislaci+¦n`;
     const resultadosBusca = await buscarOnline(pregunta, env);
     const buscaFormatada = formatearBuscaParaLlm(resultadosBusca);
 
-    // --- FASE 4: ClasificaciÃ³n fiscal ---
+    // --- FASE 4: Clasificaci+¦n fiscal ---
     const lc116Codigo = correlacion.lc116;
     const clasificacionFiscal = formatearClasificacionParaLlm({
       lc116Codigo,
@@ -155,7 +155,7 @@ app.post('/api/analisar', async (c) => {
       prestadorEsMei: empresa.mei,
     });
 
-    // --- FASE 5: Generar anÃ¡lisis (en background via Durable Object) ---
+    // --- FASE 5: Generar an+ílisis (en background via Durable Object) ---
     const taskId = generarTaskId();
     const id = c.env.DB ? `${taskId}` : taskId;
 
@@ -208,7 +208,7 @@ app.post('/api/analisar', async (c) => {
 
           await doObj.fetch(`https://tarea/${id}/actualizar`, {
             method: 'POST',
-            body: JSON.stringify({ status: 'concluido', progreso: 100, etapa_actual: 'AnÃ¡lisis concluida.', relatorio_completo: relatorio }),
+            body: JSON.stringify({ status: 'concluido', progreso: 100, etapa_actual: 'An+ílisis concluida.', relatorio_completo: relatorio }),
           });
         } catch (e) {
           await doObj.fetch(`https://tarea/${id}/actualizar`, {
@@ -229,7 +229,7 @@ app.post('/api/analisar', async (c) => {
   }
 });
 
-// Status de anÃ¡lisis
+// Status de an+ílisis
 app.get('/api/analisar/status/:taskId', async (c) => {
   const taskId = c.req.param('taskId');
   const id = c.env.DB ? `${taskId}` : taskId;
@@ -255,12 +255,12 @@ app.post('/api/extrair', async (c) => {
     const archivo = form.get('archivo');
 
     if (!archivo || !(archivo instanceof File)) {
-      return c.json({ status: 'error', error: 'NingÃºn archivo enviado.' }, 400);
+      return c.json({ status: 'error', error: 'Ning+¦n archivo enviado.' }, 400);
     }
 
     const bytes = new Uint8Array(await archivo.arrayBuffer());
     if (bytes.length > config.maxFileSizeMb * 1024 * 1024) {
-      return c.json({ status: 'error', error: `Archivo muy grande. MÃ¡ximo: ${config.maxFileSizeMb}MB` }, 413);
+      return c.json({ status: 'error', error: `Archivo muy grande. M+íximo: ${config.maxFileSizeMb}MB` }, 413);
     }
 
     const extension = archivo.name.includes('.')
@@ -280,7 +280,7 @@ app.post('/api/extrair', async (c) => {
   }
 });
 
-// HistÃ³rico
+// Hist+¦rico
 app.get('/api/historico', async (c) => {
   if (!c.env.DB) return c.json({ status: 'sucesso', analises: [] });
   const limite = parseInt(c.req.query('limite') || '20', 10);
@@ -299,12 +299,12 @@ app.get('/api/historico', async (c) => {
   });
 });
 
-// Detalle de anÃ¡lisis
+// Detalle de an+ílisis
 app.get('/api/historico/:analiseId', async (c) => {
   if (!c.env.DB) return c.json({ status: 'error', error: 'Base de datos no configurada' }, 500);
   const analiseId = parseInt(c.req.param('analiseId'), 10);
   const analise = await buscarAnalisePorId(c.env.DB, analiseId);
-  if (!analise) return c.json({ status: 'error', error: 'AnÃ¡lisis no encontrada.' }, 404);
+  if (!analise) return c.json({ status: 'error', error: 'An+ílisis no encontrada.' }, 404);
   return c.json({ status: 'sucesso', analise });
 });
 
@@ -315,7 +315,7 @@ app.post('/api/geranet/consultar-notas', async (c) => {
   return c.json(resultado);
 });
 
-// DiagnÃ³stico
+// Diagn+¦stico
 app.get('/api/diagnostico', (c) => {
   const env = c.env;
   const apis: Record<string, { nombre: string; status: string; detalle: string }> = {
@@ -325,9 +325,9 @@ app.get('/api/diagnostico', (c) => {
       status: env.OPENROUTER_API_KEY ? 'online' : 'no_configurada',
       detalle: env.OPENROUTER_API_KEY ? 'Configurada' : 'OPENROUTER_API_KEY no configurada',
     },
-    minhareceita: { nombre: 'MinhaReceita (CNPJ)', status: 'online', detalle: 'API pÃºblica' },
+    minhareceita: { nombre: 'MinhaReceita (CNPJ)', status: 'online', detalle: 'API p+¦blica' },
     tavily: {
-      nombre: 'Tavily (BÃºsqueda)',
+      nombre: 'Tavily (B+¦squeda)',
       status: env.TAVILY_API_KEY ? 'online' : 'no_configurada',
       detalle: env.TAVILY_API_KEY ? 'Configurada' : 'TAVILY_API_KEY no configurada',
     },
@@ -361,5 +361,3 @@ app.get('/api/diagnostico', (c) => {
 });
 
 export default app;
-
- 
