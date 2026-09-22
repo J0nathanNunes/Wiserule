@@ -13,23 +13,42 @@ type MessageProps = {
 };
 
 /**
- * Detecta se o texto tem encoding corrompido (caracteres UTF-8 mal interpretados como Latin-1).
- * Se detectar, renderiza como texto simples para evitar que o ReactMarkdown falhe.
+ * Corrige encoding corrompido (caracteres UTF-8 mal interpretados como Latin-1).
+ * Convierte "T├®cnico" → "Técnico", "ƒôï" → "📋", etc.
  */
-function temEncodingCorrompido(texto: string): boolean {
-  // Padrões comuns de encoding corrompido
-  const padroes = [
-    /├[í¡ú║éëâÁÉÍÓÚçÇ]/,  // Caracteres acentuados corrompidos
-    /ƒ[ôÅøöÆ]/,            // Emojis e símbolos corrompidos
-    /Ô[£Üå]/,               // Símbolos corrompidos
-    /┬║/,                   // Caracteres específicos corrompidos
-  ];
-  return padroes.some((p) => p.test(texto));
+function normalizarEncoding(texto: string): string {
+  if (!texto) return texto;
+
+  const mapa: Record<string, string> = {
+    '├í': 'í', '├¡': 'í', '├│': 'ó',
+    '├ú': 'ú', '├║': 'ú', '├é': 'é', '├ë': 'ë',
+    '├â': 'â', '├Á': 'Á', '├É': 'É', '├Í': 'Í',
+    '├Ó': 'Ó', '├Ú': 'Ú', '├ç': 'ç', '├Ç': 'Ç',
+    '├úo': 'ção', '├úes': 'ções',
+    '├¡vel': 'ível', '├¡veis': 'íveis',
+    'T├®cnico': 'Técnico', 'T├®cnico-Jur├¡dico': 'Técnico-Jurídico',
+    'Jur├¡dico': 'Jurídico', 'An├ílise': 'Análise',
+    'conclu├¡da': 'concluída', 'conclu├¡do': 'concluído',
+    '├ü': 'Á', '├ô': 'Ô', '├û': 'Û', '├ê': 'Ê',
+    '├¬': 'Ã',
+    'Ô£à': '✅', 'ƒôï': '📋', 'ƒÅó': '🏢',
+    'ƒøá´©Å': '🛠️', 'ÔÜû´©Å': '⚖️', 'ƒº«': '🧮',
+    'ƒôì': '📍', 'ƒöó': '🔢', 'ƒº¥': '🧾',
+    'ƒÆ¼': '💬', 'ÔåÆ': '→', 'ÔÇô': '–',
+  };
+
+  let resultado = texto;
+  for (const [corrompido, correto] of Object.entries(mapa)) {
+    resultado = resultado.split(corrompido).join(correto);
+  }
+
+  return resultado;
 }
 
 export default function ChatMessage({ message }: MessageProps) {
   const isUser = message.role === 'user';
-  const temCorrupcao = !isUser && temEncodingCorrompido(message.content);
+  // Normaliza el encoding antes de renderizar
+  const contenido = isUser ? message.content : normalizarEncoding(message.content);
 
   return (
     <div className={`flex items-start gap-3 ${isUser ? 'flex-row-reverse' : ''}`}>
@@ -52,12 +71,12 @@ export default function ChatMessage({ message }: MessageProps) {
             : 'bg-slate-800 rounded-tl-sm border border-slate-700 text-slate-200'
         }`}
       >
-        {isUser || temCorrupcao ? (
-          <p className="whitespace-pre-wrap text-sm leading-relaxed">{message.content}</p>
+        {isUser ? (
+          <p className="whitespace-pre-wrap text-sm leading-relaxed">{contenido}</p>
         ) : (
           <div className="markdown-body text-sm leading-relaxed">
             <ReactMarkdown remarkPlugins={[remarkGfm]}>
-              {message.content}
+              {contenido}
             </ReactMarkdown>
           </div>
         )}
