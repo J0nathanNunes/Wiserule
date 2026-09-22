@@ -19,30 +19,37 @@ export { TareaAnalisis };
 
 /**
  * Normaliza encoding de texto que pode ter sido corrompido por encoding duplo.
- * Converte texto que foi UTF-8 mas foi interpretado como Latin-1.
+ * O OpenRouter às vezes retorna texto UTF-8 que é interpretado como Latin-1.
  */
 function normalizarEncoding(texto: string): string {
   if (!texto) return texto;
 
-  try {
-    // Converte de Latin-1 para UTF-8
-    // O texto corrompido tem bytes UTF-8 interpretados como Latin-1
-    const bytes = new Uint8Array(texto.length);
-    for (let i = 0; i < texto.length; i++) {
-      bytes[i] = texto.charCodeAt(i) & 0xff;
-    }
-    const decoder = new TextDecoder('utf-8', { fatal: false });
-    const decoded = decoder.decode(bytes);
+  // Mapeamento manual de caracteres corrompidos comuns
+  const mapa: Record<string, string> = {
+    '├í': 'í', '├¡': 'í', '├│': 'ó', '├│': 'ó',
+    '├ú': 'ú', '├║': 'ú', '├é': 'é', '├ë': 'ë',
+    '├â': 'â', '├Á': 'Á', '├É': 'É', '├Í': 'Í',
+    '├Ó': 'Ó', '├Ú': 'Ú', '├ç': 'ç', '├Ç': 'Ç',
+    '├úo': 'ção', '├úes': 'ções', '├úes': 'ções',
+    '├¡vel': 'ível', '├¡veis': 'íveis',
+    '├úes': 'ções', '├úo': 'ção',
+    'T├®cnico': 'Técnico', 'T├®cnico-Jur├¡dico': 'Técnico-Jurídico',
+    'Jur├¡dico': 'Jurídico', 'An├ílise': 'Análise',
+    'conclu├¡da': 'concluída', 'conclu├¡do': 'concluído',
+    '├ü': 'Á', '├ô': 'Ô', '├û': 'Û', '├ê': 'Ê',
+    '├¬': 'Ã', '├¡': 'í', '├í': 'í',
+    'Ô£à': '✅', 'ƒôï': '📋', 'ƒÅó': '🏢',
+    'ƒøá´©Å': '🛠️', 'ÔÜû´©Å': '⚖️', 'ƒº«': '🧮',
+    'ƒôì': '📍', 'ƒöó': '🔢', 'ƒº¥': '🧾',
+    'ƒÆ¼': '💬', 'ÔåÆ': '→',
+  };
 
-    // Se a decodificação produziu texto válido (sem caracteres de substituição), usa ele
-    if (!decoded.includes('\uFFFD')) {
-      return decoded;
-    }
-  } catch {
-    // Ignora erros e usa o texto original
+  let resultado = texto;
+  for (const [corrompido, correto] of Object.entries(mapa)) {
+    resultado = resultado.split(corrompido).join(correto);
   }
 
-  return texto;
+  return resultado;
 }
 
 const app = new Hono<{ Bindings: Env }>();
