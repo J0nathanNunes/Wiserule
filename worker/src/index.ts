@@ -19,33 +19,30 @@ export { TareaAnalisis };
 
 /**
  * Normaliza encoding de texto que pode ter sido corrompido por encoding duplo.
- * Converte sequências como "├í" de volta para "í".
+ * Converte texto que foi UTF-8 mas foi interpretado como Latin-1.
  */
 function normalizarEncoding(texto: string): string {
   if (!texto) return texto;
 
-  // Mapeamento de sequências corrompidas comuns (UTF-8 mal interpretado como Latin-1)
-  const correcoes: Record<string, string> = {
-    '├í': 'í', '├¡': 'í', '├│': 'ó', '├│': 'ó',
-    '├ú': 'ú', '├║': 'ú', '├é': 'é', '├ë': 'ë',
-    '├â': 'â', '├úo': 'ção', '├úes': 'ções',
-    '├¡vel': 'ível', '├¡veis': 'íveis',
-    'T├®cnico': 'Técnico', 'Jur├¡dico': 'Jurídico',
-    'An├ílise': 'Análise', 'conclu├¡da': 'concluída',
-    '├ü': 'Á', '├ç': 'ç', '├Ç': 'Ç',
-    '├ô': 'Ô', '├û': 'Û', '├ê': 'Ê',
-    'Ô£à': '✅', 'ƒôï': '📋', 'ƒÅó': '🏢',
-    'ƒøá´©Å': '🛠️', 'ÔÜû´©Å': '⚖️', 'ƒº«': '🧮',
-    'ƒôì': '📍', 'ƒöó': '🔢', 'ƒº¥': '🧾',
-    'ƒÆ¼': '💬', 'ƒôï': '📋',
-  };
+  try {
+    // Converte de Latin-1 para UTF-8
+    // O texto corrompido tem bytes UTF-8 interpretados como Latin-1
+    const bytes = new Uint8Array(texto.length);
+    for (let i = 0; i < texto.length; i++) {
+      bytes[i] = texto.charCodeAt(i) & 0xff;
+    }
+    const decoder = new TextDecoder('utf-8', { fatal: false });
+    const decoded = decoder.decode(bytes);
 
-  let resultado = texto;
-  for (const [corrompido, correto] of Object.entries(correcoes)) {
-    resultado = resultado.split(corrompido).join(correto);
+    // Se a decodificação produziu texto válido (sem caracteres de substituição), usa ele
+    if (!decoded.includes('\uFFFD')) {
+      return decoded;
+    }
+  } catch {
+    // Ignora erros e usa o texto original
   }
 
-  return resultado;
+  return texto;
 }
 
 const app = new Hono<{ Bindings: Env }>();
