@@ -37,19 +37,19 @@ export class TareaAnalisis implements DurableObject {
 
   async initialize(id: string): Promise<void> {
     this.tarea.id = id;
-    await this.state.storage.put('tarea', JSON.stringify(this.tarea));
+    await this.state.storage.put('tarea', this.tarea);
   }
 
   async actualizar(patch: Partial<Tarea>): Promise<Tarea> {
     this.tarea = { ...this.tarea, ...patch };
-    await this.state.storage.put('tarea', JSON.stringify(this.tarea));
+    await this.state.storage.put('tarea', this.tarea);
     return this.tarea;
   }
 
   async obtener(): Promise<Tarea> {
     const stored = await this.state.storage.get('tarea');
     if (stored) {
-      this.tarea = JSON.parse(stored) as Tarea;
+      this.tarea = stored as Tarea;
     }
     return this.tarea;
   }
