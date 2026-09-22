@@ -361,5 +361,4 @@ app.get('/api/diagnostico', (c) => {
 });
 
 export default app;
-/ /   T r i g g e r   r e d e p l o y   t o   p i c k   u p   s e c r e t s  
- 
+// Trigger redeploy to pick up secrets
