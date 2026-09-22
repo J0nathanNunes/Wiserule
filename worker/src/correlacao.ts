@@ -52,17 +52,17 @@ const CNAE_LC116_MAP: Record<string, { lc116: string; descripcion: string; nbs?:
   '7990': { lc116: '10.05', descripcion: 'Organización de eventos', nbs: '6.05' },
 
   // CONSTRUCCIÓN CIVIL
-  '41': { lc116: '7.02', descripcion: 'Construcción civil (ejecución de obras)', nbs: '5.02' },
+  '41': { lc116: '7.02', descripcion: 'Construção civil (execução de obras)', nbs: '5.02' },
   '410': { lc116: '7.02', descripcion: 'Construcción civil', nbs: '5.02' },
   '4110': { lc116: '7.02', descripcion: 'Incorporación de inmuebles', nbs: '5.02' },
   '4120': { lc116: '7.02', descripcion: 'Construcción de edificios', nbs: '5.02' },
-  '42': { lc116: '7.02', descripcion: 'Obras de infraestructura', nbs: '5.02' },
+  '42': { lc116: '7.02', descripcion: 'Obras de infraestrutura', nbs: '5.02' },
   '43': { lc116: '7.02', descripcion: 'Servicios especializados para construcción', nbs: '5.02' },
   '432': { lc116: '7.02', descripcion: 'Instalaciones eléctricas e hidráulicas', nbs: '5.02' },
   '433': { lc116: '7.03', descripcion: 'Acabados en construcción', nbs: '5.03' },
   '439': { lc116: '7.04', descripcion: 'Otros servicios de construcción', nbs: '5.04' },
-  '711': { lc116: '7.05', descripcion: 'Proyectos de arquitectura e ingeniería', nbs: '5.05' },
-  '7111': { lc116: '7.05', descripcion: 'Proyectos de arquitectura', nbs: '5.05' },
+  '711': { lc116: '7.05', descripcion: 'Projetos de arquitetura e ingeniería', nbs: '5.05' },
+  '7111': { lc116: '7.05', descripcion: 'Projetos de arquitetura', nbs: '5.05' },
   '7112': { lc116: '7.05', descripcion: 'Proyectos de ingeniería', nbs: '5.05' },
   '7119': { lc116: '7.05', descripcion: 'Proyectos técnicos diversos', nbs: '5.05' },
 

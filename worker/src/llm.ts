@@ -1,11 +1,11 @@
 /**
- * Integración con OpenRouter (LLM) + OCR con conferencia cruzada.
- * Equivalente a backend/agente_llm.py en Python.
+ * Integração com OpenRouter (LLM) + OCR com conferência cruzada.
+ * Equivalente a backend/agente_llm.py em Python.
  *
- * Estrategia de OCR redundante:
- * 1. Extracción primaria (LLM multimodal)
- * 2. Extracción secundaria (LLM con prompt diferente)
- * 3. Conferencia cruzada: compara campos, si divergen hace 3ª verificación
+ * Estratégia de OCR redundante:
+ * 1. Extração primária (LLM multimodal)
+ * 2. Extração secundária (LLM com prompt diferente)
+ * 3. Conferência cruzada: compara campos, se divergem faz 3ª verificação
  */
 
 import { Config } from './config';
@@ -152,22 +152,22 @@ export function llamarLlm(
       }
       const data = await res.json();
       const content = data?.choices?.[0]?.message?.content;
-      if (!content) return { ok: false, error: 'Respuesta vacía de OpenRouter' };
+      if (!content) return { ok: false, error: 'Resposta vazia do OpenRouter' };
       return { ok: true, content };
     })
-    .catch((e) => ({ ok: false, error: `Error OpenRouter: ${e.message}` }));
+    .catch((e) => ({ ok: false, error: `Erro OpenRouter: ${e.message}` }));
 }
 
 export function extraerJson(texto: string): DadosExtraidos | null {
-  // Intenta encontrar bloque JSON delimitado por ```json ... ```
+  // Tenta encontrar bloco JSON delimitado por ```json ... ```
   const matchFence = texto.match(/```(?:json)?\s*([\s\S]*?)```/);
   const candidato = matchFence ? matchFence[1].trim() : texto;
 
-  // Intenta parsear
+  // Tenta parsear
   try {
     return JSON.parse(candidato) as DadosExtraidos;
   } catch {
-    // Intenta encontrar { ... } en el texto
+    // Tenta encontrar { ... } no texto
     const matchObj = candidato.match(/\{[\s\S]*\}/);
     if (matchObj) {
       try {
@@ -212,11 +212,11 @@ function compararCampos(a: DadosExtraidos, b: DadosExtraidos): { divergentes: st
 }
 
 /**
- * OCR con conferencia cruzada.
- * - Para PDF: extrae texto con pdfjs-dist y lo envía al LLM
- * - Para imagen: envía base64 al LLM multimodal
- * - Hace 2 extracciones independientes y las compara
- * - Si hay divergencias, hace 3ª verificación
+ * OCR com conferência cruzada.
+ * - Para PDF: extrai texto com pdfjs-dist e envia ao LLM
+ * - Para imagem: envia base64 ao LLM multimodal
+ * - Faz 2 extrações independentes e as compara
+ * - Se há divergências, faz 3ª verificação
  */
 export async function extraerDatosNfse(
   archivoBase64: string,
@@ -231,13 +231,13 @@ export async function extraerDatosNfse(
     pdf: 'application/pdf',
   }[extension.toLowerCase()] || 'image/png';
 
-  // --- Extracción primaria ---
+  // --- Extração primária ---
   const mensajesPrimaria = [
     { role: 'system', content: SYSTEM_PROMPT_OCR },
     {
       role: 'user',
       content: [
-        { type: 'text', text: 'Extrae los datos de esta NFSe y retorna SOLO el JSON.' },
+        { type: 'text', text: 'Extraia os dados desta NFSe e retorne APENAS o JSON.' },
         { type: 'image_url', image_url: { url: `data:${mimeType};base64,${archivoBase64}` } },
       ],
     },
@@ -254,13 +254,13 @@ export async function extraerDatosNfse(
   }
   const datos1 = normalizarDatos(extraerJson(res1.content || ''));
 
-  // --- Extracción secundaria (independiente) ---
+  // --- Extração secundária (independente) ---
   const mensajesSecundaria = [
     { role: 'system', content: SYSTEM_PROMPT_OCR_VERIFICACION },
     {
       role: 'user',
       content: [
-        { type: 'text', text: 'Verifica NUEVAMENTE los datos de esta NFSe. Retorna SOLO el JSON.' },
+        { type: 'text', text: 'Verifique NOVAMENTE os dados desta NFSe. Retorne APENAS o JSON.' },
         { type: 'image_url', image_url: { url: `data:${mimeType};base64,${archivoBase64}` } },
       ],
     },
@@ -269,17 +269,17 @@ export async function extraerDatosNfse(
   const res2 = await llamarLlm(mensajesSecundaria, config, apiKey, config.modeloVision, 0.1);
   const datos2 = res2.ok ? normalizarDatos(extraerJson(res2.content || '')) : datos1;
 
-  // --- Conferencia cruzada ---
+  // --- Conferência cruzada ---
   const { divergentes, coinciden } = compararCampos(datos1, datos2);
 
-  // Si hay divergencias, hace 3ª verificación
+  // Se há divergências, faz 3ª verificação
   let datosFinales = datos1;
   if (divergentes.length > 0) {
     const mensajesConferencia = [
       { role: 'system', content: SYSTEM_PROMPT_CONFERENCIA },
       {
         role: 'user',
-        content: `Extracción 1: ${JSON.stringify(datos1)}\n\nExtracción 2: ${JSON.stringify(datos2)}\n\nDecide los valores finales correctos.`,
+        content: `Extração 1: ${JSON.stringify(datos1)}\n\nExtração 2: ${JSON.stringify(datos2)}\n\nDecida os valores finais corretos.`,
       },
     ];
     const res3 = await llamarLlm(mensajesConferencia, config, apiKey, config.modeloOcr, 0.1);
@@ -291,7 +291,7 @@ export async function extraerDatosNfse(
     }
   }
 
-  // Confianza: campos coincidentes / total de campos con datos
+  // Confiança: campos coincidentes / total de campos com dados
   const camposConDatos = coinciden.length + divergentes.length;
   const confianza = camposConDatos > 0 ? coinciden.length / camposConDatos : 0;
 
@@ -330,7 +330,7 @@ export async function generarAnalisis(
     },
   ];
   const res = await llamarLlm(mensajes, config, apiKey, config.modeloAnalise, 0.3, 4096);
-  if (!res.ok) return `Error generando análisis: ${res.error}`;
+  if (!res.ok) return `Erro ao gerar análise: ${res.error}`;
 
   // Normaliza encoding (corrige caracteres UTF-8 mal interpretados como Latin-1)
   return normalizarEncoding(res.content || '');

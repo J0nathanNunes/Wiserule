@@ -1,5 +1,5 @@
 /**
- * Durable Object para el manejo de tareas asíncronas de análisis.
+ * Durable Object para gerenciamento de tarefas assíncronas de análise.
  * Equivalente a backend/tarefas.py en Python.
  *
  * Ventajas de Durable Objects:
@@ -28,7 +28,7 @@ export class TareaAnalisis implements DurableObject {
       id: '',
       status: 'aguardando',
       creado_em: new Date().toISOString(),
-      etapa_actual: 'Iniciando análisis...',
+      etapa_actual: 'Iniciando análise...',
       progreso: 0,
       relatorio_completo: null,
       error: null,

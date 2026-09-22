@@ -222,7 +222,7 @@ app.post('/api/analisar', async (c) => {
         try {
           await doObj.fetch(`https://tarea/${id}/actualizar`, {
             method: 'POST',
-            body: JSON.stringify({ status: 'procesando', progreso: 60, etapa_actual: 'Generando informe completo...' }),
+            body: JSON.stringify({ status: 'procesando', progreso: 60, etapa_actual: 'Gerando relatório completo...' }),
           });
 
           const relatorio = await generarAnalisis(contexto, config, env.OPENROUTER_API_KEY || '');

@@ -29,7 +29,7 @@ export async function salvarAnalise(
 
     return res.meta?.last_row_id || 0;
   } catch (e) {
-    console.error('[DB] Error al guardar análisis:', e);
+    console.error('[DB] Erro ao salvar análise:', e);
     return 0;
   }
 }
@@ -57,7 +57,7 @@ export async function listarAnalises(db: D1Database, limite = 20): Promise<Anali
       criado_em: (row.criado_em as string) || '',
     }));
   } catch (e) {
-    console.error('[DB] Error al listar análisis:', e);
+    console.error('[DB] Erro ao listar análises:', e);
     return [];
   }
 }
@@ -86,7 +86,7 @@ export async function buscarAnalisePorId(db: D1Database, analiseId: number): Pro
       criado_em: (res.criado_em as string) || '',
     };
   } catch (e) {
-    console.error('[DB] Error al buscar análisis:', e);
+    console.error('[DB] Erro ao buscar análise:', e);
     return null;
   }
 }

@@ -1,127 +1,127 @@
 /**
- * Clasificación Fiscal Wiserule.
- * Equivalente a backend/classificacao_fiscal.py en Python.
+ * Classificação Fiscal Wiserule.
+ * Equivalente a backend/classificacao_fiscal.py em Python.
  *
  * Integra:
- * - LC 116/2003 (ítems y excepciones Art. 3º)
+ * - LC 116/2003 (itens e exceções Art. 3º)
  * - CSN, CTM, NBS, CNAE
- * - Retenciones federales (IRRF, CSLL, COFINS, PIS)
- * - INSS Cota Patronal (art. 22 Ley 8.212/91)
- * - CEBAS (Exención de INSS)
- * - IBS/CBS (reforma tributaria)
- * - Lugar de pago del ISS (Art. 3º LC 116/2003)
+ * - Retenções federais (IRRF, CSLL, COFINS, PIS)
+ * - INSS Cota Patronal (art. 22 Lei 8.212/91)
+ * - CEBAS (Isenção de INSS)
+ * - IBS/CBS (reforma tributária)
+ * - Local de pagamento do ISS (Art. 3º LC 116/2003)
  */
 
-// Excepciones del Art. 3º LC 116/2003
+// Exceções do Art. 3º LC 116/2003
 const ARTIGO_3_EXCECOES: Record<string, { local: string; regla: string }> = {
-  '01.01': { local: 'local_ejecucion', regla: 'Servicios de informática - ISS debido en el lugar de ejecución cuando haya cesión de mano de obra' },
-  '01.02': { local: 'establecimiento_prestador', regla: 'Desarrollo bajo pedido - ISS debido en el establecimiento del prestador' },
-  '01.06': { local: 'establecimiento_prestador', regla: 'Servicios técnicos en TI - ISS debido en el establecimiento del prestador' },
-  '01.07': { local: 'local_ejecucion', regla: 'Mantenimiento de equipos - ISS debido donde el servicio se ejecute' },
-  '03.01': { local: 'local_ejecucion', regla: 'Servicios de salud - ISS debido en el lugar de ejecución' },
-  '03.02': { local: 'local_ejecucion', regla: 'Servicios médicos y odontológicos - ISS debido en el lugar de ejecución' },
-  '03.03': { local: 'local_ejecucion', regla: 'Servicios de fisioterapia - ISS debido en el lugar de ejecución' },
-  '03.04': { local: 'establecimiento_prestador', regla: 'Servicios de laboratorio - ISS debido en el establecimiento del prestador' },
-  '03.05': { local: 'local_ejecucion', regla: 'Servicios veterinarios - ISS debido en el lugar de ejecución' },
-  '04.01': { local: 'local_ejecucion', regla: 'Servicios de salud hospitalaria - ISS debido en el lugar de ejecución' },
-  '04.02': { local: 'local_ejecucion', regla: 'Servicios médicos - ISS debido en el lugar de ejecución' },
-  '04.03': { local: 'local_ejecucion', regla: 'Servicios de enfermería - ISS debido en el lugar de ejecución' },
-  '04.04': { local: 'establecimiento_prestador', regla: 'Servicios de laboratorio - ISS debido en el establecimiento del prestador' },
-  '04.05': { local: 'local_ejecucion', regla: 'Servicios veterinarios - ISS debido en el lugar de ejecución' },
-  '05.01': { local: 'local_ejecucion', regla: 'Servicios de planes de salud - ISS debido en el domicilio del tomador' },
-  '07.02': { local: 'local_ejecucion', regla: 'Ejecución de obras de construcción civil - ISS debido en el lugar de la obra' },
-  '07.03': { local: 'local_ejecucion', regla: 'Acabados - ISS debido en el lugar de la obra' },
-  '07.04': { local: 'local_ejecucion', regla: 'Servicios auxiliares de la construcción - ISS debido en el lugar de la obra' },
-  '07.05': { local: 'local_ejecucion', regla: 'Proyectos de arquitectura e ingeniería - ISS debido en el lugar de la obra' },
-  '07.16': { local: 'local_ejecucion', regla: 'Instalaciones - ISS debido en el lugar de ejecución' },
-  '07.17': { local: 'local_ejecucion', regla: 'Montaje industrial - ISS debido en el lugar de ejecución' },
-  '10.01': { local: 'local_ejecucion', regla: 'Servicios de transporte - ISS debido en el lugar de la prestación' },
-  '10.02': { local: 'local_ejecucion', regla: 'Servicios de transporte de valores - ISS debido en el lugar de la prestación' },
-  '10.03': { local: 'local_ejecucion', regla: 'Servicios de transporte de personas - ISS debido en el lugar de la prestación' },
-  '10.04': { local: 'local_ejecucion', regla: 'Servicios de transporte de cargas - ISS debido en el lugar de la prestación' },
-  '10.05': { local: 'local_ejecucion', regla: 'Organización de eventos - ISS debido en el lugar del evento' },
-  '11.01': { local: 'establecimiento_prestador', regla: 'Servicios educativos - ISS debido en el establecimiento del prestador' },
-  '11.02': { local: 'establecimiento_prestador', regla: 'Enseñanza a distancia - ISS debido en el establecimiento del prestador' },
-  '11.03': { local: 'establecimiento_prestador', regla: 'Cursos libres - ISS debido en el establecimiento del prestador' },
-  '12.01': { local: 'establecimiento_prestador', regla: 'Servicios de consultoría - ISS debido en el establecimiento del prestador' },
-  '12.02': { local: 'establecimiento_prestador', regla: 'Servicios jurídicos - ISS debido en el establecimiento del prestador' },
-  '12.03': { local: 'establecimiento_prestador', regla: 'Servicios de notaría - ISS debido en el establecimiento del prestador' },
-  '12.04': { local: 'establecimiento_prestador', regla: 'Servicios contables - ISS debido en el establecimiento del prestador' },
-  '12.05': { local: 'establecimiento_prestador', regla: 'Servicios de apoyo administrativo - ISS debido en el establecimiento del prestador' },
-  '12.06': { local: 'establecimiento_prestador', regla: 'Servicios de oficina - ISS debido en el establecimiento del prestador' },
-  '12.07': { local: 'establecimiento_prestador', regla: 'Telemarketing - ISS debido en el establecimiento del prestador' },
-  '12.08': { local: 'establecimiento_prestador', regla: 'Servicios de fotografía y traducción - ISS debido en el establecimiento del prestador' },
-  '12.09': { local: 'establecimiento_prestador', regla: 'Servicios diversos - ISS debido en el establecimiento del prestador' },
-  '14.01': { local: 'local_ejecucion', regla: 'Mantenimiento de máquinas - ISS debido en el lugar de ejecución' },
-  '14.02': { local: 'local_ejecucion', regla: 'Mantenimiento de equipos - ISS debido en el lugar de ejecución' },
-  '14.03': { local: 'local_ejecucion', regla: 'Mantenimiento de vehículos - ISS debido en el lugar de ejecución' },
-  '14.04': { local: 'local_ejecucion', regla: 'Mantenimiento de equipos diversos - ISS debido en el lugar de ejecución' },
-  '14.05': { local: 'local_ejecucion', regla: 'Mantenimiento de vehículos automotores - ISS debido en el lugar de ejecución' },
-  '14.06': { local: 'local_ejecucion', regla: 'Mantenimiento de electrodomésticos - ISS debido en el lugar de ejecución' },
-  '16.01': { local: 'local_ejecucion', regla: 'Transporte rodoviario - ISS debido en el lugar de la prestación' },
-  '16.02': { local: 'local_ejecucion', regla: 'Transporte acuaviario - ISS debido en el lugar de la prestación' },
-  '16.03': { local: 'local_ejecucion', regla: 'Transporte aéreo - ISS debido en el lugar de la prestación' },
-  '16.04': { local: 'local_ejecucion', regla: 'Almacenamiento - ISS debido en el lugar de la prestación' },
-  '16.05': { local: 'local_ejecucion', regla: 'Servicios auxiliares de transporte - ISS debido en el lugar de la prestación' },
-  '17.01': { local: 'establecimiento_prestador', regla: 'Consultoría empresarial - ISS debido en el establecimiento del prestador' },
-  '17.02': { local: 'establecimiento_prestador', regla: 'Servicios jurídicos - ISS debido en el establecimiento del prestador' },
-  '17.03': { local: 'establecimiento_prestador', regla: 'Servicios de notaría - ISS debido en el establecimiento del prestador' },
-  '17.04': { local: 'establecimiento_prestador', regla: 'Servicios contables - ISS debido en el establecimiento del prestador' },
-  '17.05': { local: 'establecimiento_prestador', regla: 'Servicios de apoyo administrativo - ISS debido en el establecimiento del prestador' },
-  '17.06': { local: 'establecimiento_prestador', regla: 'Servicios de oficina - ISS debido en el establecimiento del prestador' },
-  '17.07': { local: 'establecimiento_prestador', regla: 'Telemarketing - ISS debido en el establecimiento del prestador' },
-  '17.08': { local: 'establecimiento_prestador', regla: 'Servicios de fotografía, traducción, cobranza - ISS debido en el establecimiento del prestador' },
-  '17.09': { local: 'establecimiento_prestador', regla: 'Otros servicios - ISS debido en el establecimiento del prestador' },
-  '17.10': { local: 'local_ejecucion', regla: 'Publicidad y propaganda - ISS debido en el lugar de ejecución cuando haya veiculación' },
-  '19.01': { local: 'local_ejecucion', regla: 'Vigilancia y seguridad - ISS debido en el lugar de la prestación del servicio' },
-  '19.02': { local: 'local_ejecucion', regla: 'Transporte de valores - ISS debido en el lugar de la prestación' },
-  '19.03': { local: 'local_ejecucion', regla: 'Monitoreo electrónico - ISS debido en el lugar de la prestación' },
-  '19.04': { local: 'local_ejecucion', regla: 'Investigación particular - ISS debido en el lugar de la prestación' },
-  '20.01': { local: 'establecimiento_prestador', regla: 'Lavandería - ISS debido en el establecimiento del prestador' },
-  '20.02': { local: 'establecimiento_prestador', regla: 'Peluquería y estética - ISS debido en el establecimiento del prestador' },
-  '20.03': { local: 'local_ejecucion', regla: 'Servicios funerarios - ISS debido en el lugar de ejecución' },
-  '21.01': { local: 'local_ejecucion', regla: 'Hoteles - ISS debido en el lugar del hospedaje' },
-  '21.02': { local: 'local_ejecucion', regla: 'Albergues - ISS debido en el lugar del hospedaje' },
-  '21.03': { local: 'local_ejecucion', regla: 'Restaurantes - ISS debido en el lugar del establecimiento' },
-  '21.04': { local: 'local_ejecucion', regla: 'Bufet y catering - ISS debido en el lugar de ejecución' },
-  '22.01': { local: 'local_ejecucion', regla: 'Actividades deportivas - ISS debido en el lugar de ejecución' },
-  '22.02': { local: 'local_ejecucion', regla: 'Clubes - ISS debido en el lugar de ejecución' },
-  '22.03': { local: 'local_ejecucion', regla: 'Actividades deportivas diversas - ISS debido en el lugar de ejecución' },
-  '22.04': { local: 'local_ejecucion', regla: 'Parques de diversión - ISS debido en el lugar de ejecución' },
-  '22.05': { local: 'local_ejecucion', regla: 'Casas nocturnas - ISS debido en el lugar de ejecución' },
-  '22.06': { local: 'local_ejecucion', regla: 'Juegos y entretenimiento - ISS debido en el lugar de ejecución' },
-  '22.07': { local: 'local_ejecucion', regla: 'Entretenimiento - ISS debido en el lugar de ejecución' },
-  '22.08': { local: 'local_ejecucion', regla: 'Actividades culturales - ISS debido en el lugar de ejecución' },
-  '22.09': { local: 'local_ejecucion', regla: 'Producción audiovisual - ISS debido en el lugar de ejecución' },
-  '22.10': { local: 'local_ejecucion', regla: 'Grabación de sonido - ISS debido en el lugar de ejecución' },
-  '22.11': { local: 'establecimiento_prestador', regla: 'Radio - ISS debido en el establecimiento del prestador' },
-  '22.12': { local: 'establecimiento_prestador', regla: 'Televisión - ISS debido en el establecimiento del prestador' },
-  '22.13': { local: 'establecimiento_prestador', regla: 'Telecomunicaciones - ISS debido en el establecimiento del prestador' },
-  '22.14': { local: 'establecimiento_prestador', regla: 'Servicios de información - ISS debido en el establecimiento del prestador' },
-  '22.15': { local: 'establecimiento_prestador', regla: 'Alquiler de bienes muebles - ISS debido en el establecimiento del prestador' },
-  '22.16': { local: 'establecimiento_prestador', regla: 'Alquiler de máquinas - ISS debido en el establecimiento del prestador' },
-  '22.17': { local: 'establecimiento_prestador', regla: 'Alquiler de propiedad intelectual - ISS debido en el establecimiento del prestador' },
-  '22.18': { local: 'establecimiento_prestador', regla: 'Reclutamiento y selección - ISS debido en el establecimiento del prestador' },
-  '22.19': { local: 'local_ejecucion', regla: 'Servicios temporales - ISS debido en el lugar de la prestación' },
-  '22.20': { local: 'establecimiento_prestador', regla: 'Gestión de RRHH - ISS debido en el establecimiento del prestador' },
-  '22.21': { local: 'establecimiento_prestador', regla: 'Agencias de viaje - ISS debido en el establecimiento del prestador' },
-  '22.22': { local: 'local_ejecucion', regla: 'Guías de turismo - ISS debido en el lugar de ejecución' },
-  '22.23': { local: 'local_ejecucion', regla: 'Limpieza y conservación - ISS debido en el lugar de ejecución' },
-  '22.24': { local: 'local_ejecucion', regla: 'Paisajismo y jardinería - ISS debido en el lugar de ejecución' },
-  '23.01': { local: 'establecimiento_prestador', regla: 'Corretaje de inmuebles - ISS debido en el establecimiento del prestador' },
-  '23.02': { local: 'local_ejecucion', regla: 'Administración de condominios - ISS debido en el lugar del inmueble' },
-  '23.03': { local: 'local_ejecucion', regla: 'Evaluación de inmuebles - ISS debido en el lugar del inmueble' },
+  '01.01': { local: 'local_ejecucion', regla: 'Serviços de informática - ISS devido no local de execução quando houver cessão de mão de obra' },
+  '01.02': { local: 'establecimiento_prestador', regla: 'Desenvolvimento sob encomenda - ISS devido no estabelecimento do prestador' },
+  '01.06': { local: 'establecimiento_prestador', regla: 'Serviços técnicos em TI - ISS devido no estabelecimento do prestador' },
+  '01.07': { local: 'local_ejecucion', regla: 'Manutenção de equipamentos - ISS devido onde o serviço for executado' },
+  '03.01': { local: 'local_ejecucion', regla: 'Serviços de saúde - ISS devido no local de execução' },
+  '03.02': { local: 'local_ejecucion', regla: 'Serviços médicos e odontológicos - ISS devido no local de execução' },
+  '03.03': { local: 'local_ejecucion', regla: 'Serviços de fisioterapia - ISS devido no local de execução' },
+  '03.04': { local: 'establecimiento_prestador', regla: 'Serviços de laboratório - ISS devido no estabelecimento do prestador' },
+  '03.05': { local: 'local_ejecucion', regla: 'Serviços veterinários - ISS devido no local de execução' },
+  '04.01': { local: 'local_ejecucion', regla: 'Serviços de saúde hospitalar - ISS devido no local de execução' },
+  '04.02': { local: 'local_ejecucion', regla: 'Serviços médicos - ISS devido no local de execução' },
+  '04.03': { local: 'local_ejecucion', regla: 'Serviços de enfermagem - ISS devido no local de execução' },
+  '04.04': { local: 'establecimiento_prestador', regla: 'Serviços de laboratório - ISS devido no estabelecimento do prestador' },
+  '04.05': { local: 'local_ejecucion', regla: 'Serviços veterinários - ISS devido no local de execução' },
+  '05.01': { local: 'local_ejecucion', regla: 'Serviços de planos de saúde - ISS devido no domicílio do tomador' },
+  '07.02': { local: 'local_ejecucion', regla: 'Execução de obras de construção civil - ISS devido no local da obra' },
+  '07.03': { local: 'local_ejecucion', regla: 'Acabamentos - ISS devido no local da obra' },
+  '07.04': { local: 'local_ejecucion', regla: 'Serviços auxiliares da construção - ISS devido no local da obra' },
+  '07.05': { local: 'local_ejecucion', regla: 'Projetos de arquitetura e engenharia - ISS devido no local da obra' },
+  '07.16': { local: 'local_ejecucion', regla: 'Instalações - ISS devido no local de execução' },
+  '07.17': { local: 'local_ejecucion', regla: 'Montagem industrial - ISS devido no local de execução' },
+  '10.01': { local: 'local_ejecucion', regla: 'Serviços de transporte - ISS devido no local da prestação' },
+  '10.02': { local: 'local_ejecucion', regla: 'Serviços de transporte de valores - ISS devido no local da prestação' },
+  '10.03': { local: 'local_ejecucion', regla: 'Serviços de transporte de pessoas - ISS devido no local da prestação' },
+  '10.04': { local: 'local_ejecucion', regla: 'Serviços de transporte de cargas - ISS devido no local da prestação' },
+  '10.05': { local: 'local_ejecucion', regla: 'Organização de eventos - ISS devido no local do evento' },
+  '11.01': { local: 'establecimiento_prestador', regla: 'Serviços educacionais - ISS devido no estabelecimento do prestador' },
+  '11.02': { local: 'establecimiento_prestador', regla: 'Ensino a distância - ISS devido no estabelecimento do prestador' },
+  '11.03': { local: 'establecimiento_prestador', regla: 'Cursos livres - ISS devido no estabelecimento do prestador' },
+  '12.01': { local: 'establecimiento_prestador', regla: 'Serviços de consultoria - ISS devido no estabelecimento do prestador' },
+  '12.02': { local: 'establecimiento_prestador', regla: 'Serviços jurídicos - ISS devido no estabelecimento do prestador' },
+  '12.03': { local: 'establecimiento_prestador', regla: 'Serviços de cartório - ISS devido no estabelecimento do prestador' },
+  '12.04': { local: 'establecimiento_prestador', regla: 'Serviços contábeis - ISS devido no estabelecimento do prestador' },
+  '12.05': { local: 'establecimiento_prestador', regla: 'Serviços de apoio administrativo - ISS devido no estabelecimento do prestador' },
+  '12.06': { local: 'establecimiento_prestador', regla: 'Serviços de escritório - ISS devido no estabelecimento do prestador' },
+  '12.07': { local: 'establecimiento_prestador', regla: 'Telemarketing - ISS devido no estabelecimento do prestador' },
+  '12.08': { local: 'establecimiento_prestador', regla: 'Serviços de fotografia e tradução - ISS devido no estabelecimento do prestador' },
+  '12.09': { local: 'establecimiento_prestador', regla: 'Serviços diversos - ISS devido no estabelecimento do prestador' },
+  '14.01': { local: 'local_ejecucion', regla: 'Manutenção de máquinas - ISS devido no local de execução' },
+  '14.02': { local: 'local_ejecucion', regla: 'Manutenção de equipamentos - ISS devido no local de execução' },
+  '14.03': { local: 'local_ejecucion', regla: 'Manutenção de veículos - ISS devido no local de execução' },
+  '14.04': { local: 'local_ejecucion', regla: 'Manutenção de equipamentos diversos - ISS devido no local de execução' },
+  '14.05': { local: 'local_ejecucion', regla: 'Manutenção de veículos automotores - ISS devido no local de execução' },
+  '14.06': { local: 'local_ejecucion', regla: 'Manutenção de eletrodomésticos - ISS devido no local de execução' },
+  '16.01': { local: 'local_ejecucion', regla: 'Transporte rodoviário - ISS devido no local da prestação' },
+  '16.02': { local: 'local_ejecucion', regla: 'Transporte aquaviário - ISS devido no local da prestação' },
+  '16.03': { local: 'local_ejecucion', regla: 'Transporte aéreo - ISS devido no local da prestação' },
+  '16.04': { local: 'local_ejecucion', regla: 'Armazenamento - ISS devido no local da prestação' },
+  '16.05': { local: 'local_ejecucion', regla: 'Serviços auxiliares de transporte - ISS devido no local da prestação' },
+  '17.01': { local: 'establecimiento_prestador', regla: 'Consultoria empresarial - ISS devido no estabelecimento do prestador' },
+  '17.02': { local: 'establecimiento_prestador', regla: 'Serviços jurídicos - ISS devido no estabelecimento do prestador' },
+  '17.03': { local: 'establecimiento_prestador', regla: 'Serviços de cartório - ISS devido no estabelecimento do prestador' },
+  '17.04': { local: 'establecimiento_prestador', regla: 'Serviços contábeis - ISS devido no estabelecimento do prestador' },
+  '17.05': { local: 'establecimiento_prestador', regla: 'Serviços de apoio administrativo - ISS devido no estabelecimento do prestador' },
+  '17.06': { local: 'establecimiento_prestador', regla: 'Serviços de escritório - ISS devido no estabelecimento do prestador' },
+  '17.07': { local: 'establecimiento_prestador', regla: 'Telemarketing - ISS devido no estabelecimento do prestador' },
+  '17.08': { local: 'establecimiento_prestador', regla: 'Serviços de fotografia, tradução, cobrança - ISS devido no estabelecimento do prestador' },
+  '17.09': { local: 'establecimiento_prestador', regla: 'Outros serviços - ISS devido no estabelecimento do prestador' },
+  '17.10': { local: 'local_ejecucion', regla: 'Publicidade e propaganda - ISS devido no local de execução quando houver veiculação' },
+  '19.01': { local: 'local_ejecucion', regla: 'Vigilância e segurança - ISS devido no local da prestação do serviço' },
+  '19.02': { local: 'local_ejecucion', regla: 'Transporte de valores - ISS devido no local da prestação' },
+  '19.03': { local: 'local_ejecucion', regla: 'Monitoramento eletrônico - ISS devido no local da prestação' },
+  '19.04': { local: 'local_ejecucion', regla: 'Investigação particular - ISS devido no local da prestação' },
+  '20.01': { local: 'establecimiento_prestador', regla: 'Lavanderia - ISS devido no estabelecimento do prestador' },
+  '20.02': { local: 'establecimiento_prestador', regla: 'Cabeleireiro e estética - ISS devido no estabelecimento do prestador' },
+  '20.03': { local: 'local_ejecucion', regla: 'Serviços funerários - ISS devido no local de execução' },
+  '21.01': { local: 'local_ejecucion', regla: 'Hotéis - ISS devido no local da hospedagem' },
+  '21.02': { local: 'local_ejecucion', regla: 'Albergues - ISS devido no local da hospedagem' },
+  '21.03': { local: 'local_ejecucion', regla: 'Restaurantes - ISS devido no local do estabelecimento' },
+  '21.04': { local: 'local_ejecucion', regla: 'Bufê e catering - ISS devido no local de execução' },
+  '22.01': { local: 'local_ejecucion', regla: 'Atividades esportivas - ISS devido no local de execução' },
+  '22.02': { local: 'local_ejecucion', regla: 'Clubes - ISS devido no local de execução' },
+  '22.03': { local: 'local_ejecucion', regla: 'Atividades esportivas diversas - ISS devido no local de execução' },
+  '22.04': { local: 'local_ejecucion', regla: 'Parques de diversão - ISS devido no local de execução' },
+  '22.05': { local: 'local_ejecucion', regla: 'Casas noturnas - ISS devido no local de execução' },
+  '22.06': { local: 'local_ejecucion', regla: 'Jogos e entretenimento - ISS devido no local de execução' },
+  '22.07': { local: 'local_ejecucion', regla: 'Entretenimento - ISS devido no local de execução' },
+  '22.08': { local: 'local_ejecucion', regla: 'Atividades culturais - ISS devido no local de execução' },
+  '22.09': { local: 'local_ejecucion', regla: 'Produção audiovisual - ISS devido no local de execução' },
+  '22.10': { local: 'local_ejecucion', regla: 'Gravação de som - ISS devido no local de execução' },
+  '22.11': { local: 'establecimiento_prestador', regla: 'Rádio - ISS devido no estabelecimento do prestador' },
+  '22.12': { local: 'establecimiento_prestador', regla: 'Televisão - ISS devido no estabelecimento do prestador' },
+  '22.13': { local: 'establecimiento_prestador', regla: 'Telecomunicações - ISS devido no estabelecimento do prestador' },
+  '22.14': { local: 'establecimiento_prestador', regla: 'Serviços de informação - ISS devido no estabelecimento do prestador' },
+  '22.15': { local: 'establecimiento_prestador', regla: 'Aluguel de bens móveis - ISS devido no estabelecimento do prestador' },
+  '22.16': { local: 'establecimiento_prestador', regla: 'Aluguel de máquinas - ISS devido no estabelecimento do prestador' },
+  '22.17': { local: 'establecimiento_prestador', regla: 'Aluguel de propriedade intelectual - ISS devido no estabelecimento do prestador' },
+  '22.18': { local: 'establecimiento_prestador', regla: 'Recrutamento e seleção - ISS devido no estabelecimento do prestador' },
+  '22.19': { local: 'local_ejecucion', regla: 'Serviços temporários - ISS devido no local da prestação' },
+  '22.20': { local: 'establecimiento_prestador', regla: 'Gestão de RH - ISS devido no estabelecimento do prestador' },
+  '22.21': { local: 'establecimiento_prestador', regla: 'Agências de viagem - ISS devido no estabelecimento do prestador' },
+  '22.22': { local: 'local_ejecucion', regla: 'Guias de turismo - ISS devido no local de execução' },
+  '22.23': { local: 'local_ejecucion', regla: 'Limpeza e conservação - ISS devido no local de execução' },
+  '22.24': { local: 'local_ejecucion', regla: 'Paisagismo e jardinagem - ISS devido no local de execução' },
+  '23.01': { local: 'establecimiento_prestador', regla: 'Corretagem de imóveis - ISS devido no estabelecimento do prestador' },
+  '23.02': { local: 'local_ejecucion', regla: 'Administração de condomínios - ISS devido no local do imóvel' },
+  '23.03': { local: 'local_ejecucion', regla: 'Avaliação de imóveis - ISS devido no local do imóvel' },
 };
 
-// CNPJs de entidades inmunes/exentas con CEBAS
+// CNPJs de entidades imunes/isentas com CEBAS
 const ENTIDADES_CEBAS_CONOCIDAS = ['60833910000106'];
 
-// Servicios que generan obligación de cota patronal cuando se contratan de MEI
+// Serviços que geram obrigação de cota patronal quando contratados de MEI
 const SERVICIOS_COTA_PATRONAL_MEI = [
-  'hidráulica', 'electricidad', 'pintura', 'albañilería', 'carpintería',
-  'mantenimiento', 'reparación', 'demolición', 'limpieza', 'construcción',
-  'albañil', 'plomero', 'electricista', 'pintor', 'servicios generales',
-  'conservación', 'celaduría',
+  'hidráulica', 'eletricidade', 'pintura', 'alvenaria', 'carpintaria',
+  'manutenção', 'reparação', 'demolição', 'limpeza', 'construção',
+  'pedreiro', 'encanador', 'eletricista', 'pintor', 'serviços gerais',
+  'conservação', 'zeladoria',
 ];
 
 export interface LocalIss {
@@ -162,7 +162,7 @@ export function clasificarLocalIss(lc116Codigo: string): LocalIss {
   }
   return {
     local_pago: 'establecimiento_prestador',
-    regla_descripcion: 'Regla general: ISS debido en el municipio del establecimiento prestador (Art. 3º LC 116/2003)',
+    regla_descripcion: 'Regra geral: ISS devido no município do estabelecimento prestador (Art. 3º LC 116/2003)',
     exige_obra_art: false,
   };
 }
@@ -196,8 +196,8 @@ export function clasificarCotaPatronal(
       exige_cota_patronal: false,
       porcentaje: 0,
       recaudacion: 'dispensado',
-      observacion: 'Tomador con CEBAS - dispensado de la cota patronal (art. 55 Ley 8.212/91)',
-      base_legal: 'Constitución Federal, art. 195, §7º c/c Ley 8.212/91, art. 55',
+      observacion: 'Tomador com CEBAS - dispensado da cota patronal (art. 55 Lei 8.212/91)',
+      base_legal: 'Constituição Federal, art. 195, §7º c/c Lei 8.212/91, art. 55',
     };
   }
 
@@ -206,8 +206,8 @@ export function clasificarCotaPatronal(
       exige_cota_patronal: false,
       porcentaje: 0,
       recaudacion: 'no_aplica',
-      observacion: 'Prestador no es MEI. La cota patronal de INSS es debida por el tomador directamente sobre la nómina (20% - art. 22 Ley 8.212/91), no habiendo recaudación específica sobre el valor de la NFSe.',
-      base_legal: 'Ley 8.212/91, art. 22',
+      observacion: 'Prestador não é MEI. A cota patronal de INSS é devida pelo tomador diretamente sobre a folha (20% - art. 22 Lei 8.212/91), não havendo arrecadação específica sobre o valor da NFSe.',
+      base_legal: 'Lei 8.212/91, art. 22',
     };
   }
 
@@ -222,7 +222,7 @@ export function clasificarCotaPatronal(
       exige_cota_patronal: true,
       porcentaje: 20,
       recaudacion: 'tomador_recauda_20',
-      observacion: `Prestador MEI prestando servicio de '${descripcionServicio}'. El tomador debe recaudar contribución previsional de 20% sobre el valor de la nota (art. 22, III Ley 8.212/91). El MEI ya recauda 5% vía DAS (art. 18, §5-C LC 123/2006), pero la cota patronal adicional es debida por el tomador.`,
+      observacion: `Prestador MEI prestando serviço de '${descripcionServicio}'. O tomador deve arrecadar contribuição previdenciária de 20% sobre o valor da nota (art. 22, III Lei 8.212/91). O MEI já arrecada 5% via DAS (art. 18, §5-C LC 123/2006), mas a cota patronal adicional é devida pelo tomador.`,
       base_legal: 'CF art. 195, I; Ley 8.212/91, art. 22, III; LC 123/2006, art. 18, §5-C',
     };
   }
@@ -231,7 +231,7 @@ export function clasificarCotaPatronal(
     exige_cota_patronal: false,
     porcentaje: 0,
     recaudacion: 'no_exige',
-    observacion: `Prestador MEI, pero el servicio '${descripcionServicio}' no está entre los que generan obligación de cota patronal adicional. El MEI ya recauda 5% vía DAS-MEI.`,
+    observacion: `Prestador MEI, mas o serviço '${descripcionServicio}' não está entre os que geram obrigação de cota patronal adicional. O MEI já arrecada 5% via DAS-MEI.`,
     base_legal: 'LC 123/2006, art. 18, §5-C',
   };
 }
@@ -284,30 +284,30 @@ export function formatearClasificacionParaLlm(params: {
   );
 
   const partes: string[] = [
-    '## Clasificación Fiscal Detallada',
+    '## Classificação Fiscal Detalhada',
     '',
-    '### Lugar de Pago del ISS (Art. 3º LC 116/2003)',
-    `Regla: ${localIss.regla_descripcion}`,
-    `Lugar de pago: ${localIss.local_pago}`,
-    `Exige ART/CREA: ${localIss.exige_obra_art ? 'Sí' : 'No'}`,
+    '### Local de Pagamento do ISS (Art. 3º LC 116/2003)',
+    `Regra: ${localIss.regla_descripcion}`,
+    `Local de pagamento: ${localIss.local_pago}`,
+    `Exige ART/CREA: ${localIss.exige_obra_art ? 'Sim' : 'Não'}`,
     '',
   ];
 
   if (localIss.local_pago === 'local_ejecucion' && params.ciudadPrestador && params.ciudadPrestador !== params.ciudadServicio) {
     partes.push(
-      `⚠️ ATENCIÓN: El servicio se ejecuta en ${params.ciudadServicio}/${params.ufServicio}, ` +
-      `pero el prestador está en ${params.ciudadPrestador}. El ISS debe pagarse ` +
-      `en el municipio de ejecución (${params.ciudadServicio}).`,
+      `⚠️ ATENÇÃO: O serviço é executado em ${params.ciudadServicio}/${params.ufServicio}, ` +
+      `mas o prestador está em ${params.ciudadPrestador}. O ISS deve ser pago ` +
+      `no município de execução (${params.ciudadServicio}).`,
       '',
     );
   }
 
-  partes.push('### Retenciones Federales (IN RFB 2.100/2022)');
+  partes.push('### Retenções Federais (IN RFB 2.100/2022)');
   if (params.simplesNacional) {
-    partes.push('Empresa optante del Simples Nacional → No hay retención de tributos federales.');
+    partes.push('Empresa optante do Simples Nacional → Não há retenção de tributos federais.');
     partes.push('Base legal: LC 123/2006, art. 13');
   } else {
-    partes.push('Empresa NO optante del Simples Nacional → Sujeta a retenciones:');
+    partes.push('Empresa NÃO optante do Simples Nacional → Sujeita a retenções:');
     for (const [tributo, datos] of Object.entries(retenciones)) {
       if (datos.retener) {
         partes.push(`- ${tributo.toUpperCase()}: ${datos.aliquota}% - ${datos.base_legal}`);
@@ -317,23 +317,23 @@ export function formatearClasificacionParaLlm(params: {
         }
       }
     }
-    partes.push('', 'Estos tributos DEBEN destacarse en la NFSe cuando el tomador sea persona jurídica.');
-    partes.push('La falta de destaque puede generar multa y responsabilidad solidaria.');
+    partes.push('', 'Estes tributos DEVEM ser destacados na NFSe quando o tomador for pessoa jurídica.');
+    partes.push('A falta de destaque pode gerar multa e responsabilidade solidária.');
   }
 
   partes.push('', '### INSS - Cota Patronal (art. 195, I, CF)');
-  partes.push(`Exige cota patronal: ${cotaPatronal.exige_cota_patronal ? 'Sí' : 'No'}`);
+  partes.push(`Exige cota patronal: ${cotaPatronal.exige_cota_patronal ? 'Sim' : 'Não'}`);
   if (cotaPatronal.porcentaje > 0) {
-    partes.push(`Porcentaje: ${cotaPatronal.porcentaje}% sobre el valor`);
+    partes.push(`Percentual: ${cotaPatronal.porcentaje}% sobre o valor`);
   }
-  partes.push(`Recaudación: ${cotaPatronal.recaudacion}`);
-  partes.push(`Observación: ${cotaPatronal.observacion}`);
+  partes.push(`Arrecadação: ${cotaPatronal.recaudacion}`);
+  partes.push(`Observação: ${cotaPatronal.observacion}`);
   partes.push(`Base legal: ${cotaPatronal.base_legal}`);
 
-  partes.push('', '### IBS/CBS - Reforma Tributaria (EC 132/2023)');
+  partes.push('', '### IBS/CBS - Reforma Tributária (EC 132/2023)');
   partes.push(`CST: ${ibscbs.cst} | cIndOp: ${ibscbs.cindop}`);
-  partes.push(`Alícuota IBS sugerida: ${ibscbs.aliquota_ibs}% | CBS: ${ibscbs.aliquota_cbs}%`);
-  partes.push(`Período de transición: ${ibscbs.periodo_transicion}`);
+  partes.push(`Alíquota IBS sugerida: ${ibscbs.aliquota_ibs}% | CBS: ${ibscbs.aliquota_cbs}%`);
+  partes.push(`Período de transição: ${ibscbs.periodo_transicion}`);
   partes.push(`Base legal: ${ibscbs.base_legal}`);
 
   return partes.join('\n');
