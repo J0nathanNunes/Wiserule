@@ -1,4 +1,4 @@
-﻿﻿/**
+﻿/**
  * Integração com OpenRouter (LLM) + OCR com conferência cruzada.
  * Equivalente a backend/agente_llm.py em Python.
  *
@@ -409,7 +409,7 @@ export async function generarAnalisis(
  *
  * Esta abordagem funciona para QUALQUER caractere corrompido, não apenas os conhecidos.
  */
-function normalizarEncoding(texto: string): string {
+export function normalizarEncoding(texto: string): string {
   if (!texto) return texto;
 
   // Verifica se o texto tem sinais de corrupção UTF-8

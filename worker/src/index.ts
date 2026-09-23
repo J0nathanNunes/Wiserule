@@ -7,7 +7,7 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { getConfig, Env } from './config';
 import { consultarCnpj, consultarCnpjFallback, emptyEmpresa } from './cnpj';
-import { extraerDatosNfse, extraerDatosTexto, generarAnalisis } from './llm';
+import { extraerDatosNfse, extraerDatosTexto, generarAnalisis, normalizarEncoding } from './llm';
 import { buscarOnline, formatearBuscaParaLlm } from './busca';
 import { correlacionarPorCnae, formatearCorrelacionParaLlm } from './correlacao';
 import { formatearClasificacionParaLlm } from './classificacao';
@@ -285,7 +285,16 @@ app.get('/api/analisar/status/:taskId', async (c) => {
     const doId = c.env.TAREA_ANALISIS.idFromName(id);
     const doObj = c.env.TAREA_ANALISIS.get(doId);
     const res = await doObj.fetch(`https://tarea/${id}/status`);
-    const tarea = await res.json();
+    const tarea = await res.json() as any;
+
+    // Normaliza encoding do relatório (corrige mojibake do Durable Object)
+    if (tarea.relatorio_completo) {
+      tarea.relatorio_completo = normalizarEncoding(tarea.relatorio_completo);
+    }
+    if (tarea.etapa_actual) {
+      tarea.etapa_actual = normalizarEncoding(tarea.etapa_actual);
+    }
+
     return c.json(tarea);
   } catch {
     return c.json({ status: 'error', error: 'Tarea no encontrada.' }, 404);
