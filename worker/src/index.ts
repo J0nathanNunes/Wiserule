@@ -137,6 +137,7 @@ app.post('/api/analisar', async (c) => {
     const form = await c.req.formData();
     const cnpjForm = form.get('cnpj')?.toString() || '';
     const servicoForm = form.get('servico')?.toString() || '';
+    const servicoDescricaoForm = form.get('servico_descricao')?.toString() || '';
     const valorForm = form.get('valor')?.toString() || '';
     const cidadeForm = form.get('cidade')?.toString() || '';
     const ufForm = form.get('uf')?.toString() || '';
@@ -168,6 +169,7 @@ app.post('/api/analisar', async (c) => {
         datosExtraidos = {
           cnpj: cnpjForm,
           servico: servicoForm,
+          servico_descricao: servicoDescricaoForm,
           valor: parseValorMonetario(valorForm),
           cidade: cidadeForm,
           uf: ufForm,
@@ -205,6 +207,7 @@ app.post('/api/analisar', async (c) => {
     // Mezcla datos
     const cnpj = cnpjForm || String(datosExtraidos.cnpj || '');
     const servico = servicoForm || String(datosExtraidos.servico || '');
+    const servicoDescricao = servicoDescricaoForm || String(datosExtraidos.servico_descricao || '');
     const valor = valorForm ? parseValorMonetario(valorForm) : Number(datosExtraidos.valor || 0);
     const cidade = cidadeForm || String(datosExtraidos.cidade || '');
     const uf = ufForm || String(datosExtraidos.uf || '');
@@ -223,7 +226,7 @@ app.post('/api/analisar', async (c) => {
       return c.json({
         status: 'revisao_necessaria',
         mensagem: 'Confira os campos extraídos da NFSe e confirme antes de iniciar a análise.',
-        dados_extraidos: { cnpj, servico, valor, cidade, uf },
+        dados_extraidos: { cnpj, servico, servico_descricao: servicoDescricao, valor, cidade, uf },
         candidatos_ocr: resultadoOcr?.candidatos || {},
         confiança_ocr: resultadoOcr?.confianza ?? 0,
         campos_divergentes: resultadoOcr?.campos_divergentes || [],

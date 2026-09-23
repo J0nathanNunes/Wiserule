@@ -193,8 +193,8 @@ export function validarDadosExtraidos(dados: {
 }
 
 export interface DadosRotuladosNfse {
-  dados: Partial<{ cnpj: string; servico: string; valor: number; cidade: string; uf: string }>;
-  candidatos: Partial<Record<'cnpj' | 'servico' | 'valor' | 'cidade' | 'uf', string[]>>;
+  dados: Partial<{ cnpj: string; servico: string; servico_descricao: string; valor: number; cidade: string; uf: string }>;
+  candidatos: Partial<Record<'cnpj' | 'servico' | 'servico_descricao' | 'valor' | 'cidade' | 'uf', string[]>>;
 }
 
 /**
@@ -243,24 +243,53 @@ export function extrairDadosRotuladosNfse(texto: string): DadosRotuladosNfse {
     if (candidatos.cnpj.length === 1 && cnpjsValidos.length === 1) dados.cnpj = cnpjsValidos[0];
   }
 
-  const valoresServico: string[] = [];
+  // "Serviço Prestado" (código + descrição oficial da legislação) é o campo
+// principal para tributação. "Descrição do Serviço" é informativo (detalhamento)
+// e não serve para tributação, mas deve ser coerente com o serviço prestado.
+const valoresServico: string[] = [];
+  const valoresServicoDescricao: string[] = [];
   linhas.forEach((linha, indice) => {
     const linhaNormalizada = normalizar(linha);
-    // Prioriza "descrição do serviço prestado" (que contiene la descripción real).
-    // "SERVIÇO PRESTADO" como rótulo de sección no debe tomarse como descripción.
-    const rotulo = linhaNormalizada.match(/(?:(?:discriminacao|descricao)(?:\s+dos?)?\s+servi.{0,2}os?(?:\s+prestado)?|descricao do servico)\s*[:\-]?\s*(.*)$/);
-    if (!rotulo) return;
-    const rotuloComValor = linha.match(/(?:(?:discrimina.{0,2}o|descri.{0,2}o)(?:\s+dos?)?\s+servi.{0,2}os?(?:\s+prestado)?|descri.{0,2}o do servi.{0,2}o)\s*[:\-]?\s*(.*)$/i);
-    let valor = rotuloComValor?.[1]?.trim() || '';
-    if (!valor && linhas[indice + 1]) {
-      const proxima = linhas[indice + 1];
-      if (!/^(?:valor|iss|retenc|cnae|codigo|municipio|local|cnpj|total|base)\b/i.test(normalizar(proxima))) valor = proxima;
+    // Rótulo "Descrição do Serviço" (informativo)
+    const rotuloDescricao = linhaNormalizada.match(/descri.{0,2}o\s+do\s+servi.{0,2}o\s*[:\-]?\s*(.*)$/);
+    if (rotuloDescricao) {
+      let valor = linha.match(/descri.{0,2}o\s+do\s+servi.{0,2}o\s*[:\-]?\s*(.*)$/i)?.[1]?.trim() || '';
+      if (!valor && linhas[indice + 1]) {
+        const proxima = linhas[indice + 1];
+        if (!/^(?:valor|iss|retenc|cnae|codigo|municipio|local|cnpj|total|base|tributac)\b/i.test(normalizar(proxima))) valor = proxima;
+      }
+      if (valor.length >= 3) valoresServicoDescricao.push(valor.slice(0, 1000));
+      return;
     }
-    if (valor.length >= 3) valoresServico.push(valor.slice(0, 1000));
+    // Rótulo "Serviço Prestado" (código + descrição oficial). Não confundir
+    // com "Descrição do Serviço" (informativo).
+    // Formato nacional: "SERVIÇO PRESTADO Código de Tributación..." en la cabecera
+    // y el código + descripción oficial en las líneas siguientes.
+    if (/servi.{0,2}o\s+prestado/.test(linhaNormalizada)) {
+      // Formato nacional: la línea siguiente tiene el código del servicio
+      // (ej.: "13.05.01 / - - Campo Grande / MS / -") y la descripción oficial
+      // en la línea posterior.
+      const proxima = linhas[indice + 1] || '';
+      const codigo = proxima.match(/^(\d{2}\.\d{2}(?:\.\d{2})?)\s*\/\s*-\s*-\s*(.*)$/);
+      if (codigo) {
+        const descripcionOficial = linhas[indice + 2] || '';
+        const descripcion = descripcionOficial.trim();
+        const valor = descripcion.length >= 3 ? `${codigo[1]} - ${descripcion}` : codigo[1];
+        if (valor.length >= 3) valoresServico.push(valor.slice(0, 1000));
+      } else if (proxima && !/^(?:valor|iss|retenc|cnae|codigo|municipio|local|cnpj|total|base|tributac|descri)\b/i.test(normalizar(proxima))) {
+        // Formato antiguo: "SERVIÇO PRESTADO" como rótulo de sección y la
+        // descripción en la línea siguiente.
+        if (proxima.length >= 3) valoresServico.push(proxima.slice(0, 1000));
+      }
+    }
   });
   if (valoresServico.length) {
     candidatos.servico = [...new Set(valoresServico)];
     if (candidatos.servico.length === 1) dados.servico = candidatos.servico[0];
+  }
+  if (valoresServicoDescricao.length) {
+    candidatos.servico_descricao = [...new Set(valoresServicoDescricao)];
+    if (candidatos.servico_descricao.length === 1) dados.servico_descricao = candidatos.servico_descricao[0];
   }
 
   const valoresRotulados: number[] = [];

@@ -13,6 +13,7 @@ import { Config } from './config';
 export interface DadosExtraidos {
   cnpj: string;
   servico: string;
+  servico_descricao?: string;
   valor: number;
   cidade: string;
   uf: string;
@@ -22,7 +23,7 @@ export interface DadosExtraidos {
 
 export interface ResultadoOcr {
   dados: DadosExtraidos;
-  candidatos: Record<'cnpj' | 'servico' | 'valor' | 'cidade' | 'uf', string[]>;
+  candidatos: Record<'cnpj' | 'servico' | 'servico_descricao' | 'valor' | 'cidade' | 'uf', string[]>;
   confianza: number; // 0 a 1
   campos_divergentes: string[];
   metodo: string;
@@ -184,6 +185,7 @@ function normalizarDados(d: DadosExtraidos | null): DadosExtraidos {
   return {
     cnpj: typeof d.cnpj === 'string' ? d.cnpj.replace(/\D/g, '') : '',
     servico: typeof d.servico === 'string' ? d.servico.trim() : '',
+    servico_descricao: typeof d.servico_descricao === 'string' ? d.servico_descricao.trim() : undefined,
     valor: Number.isFinite(valor) ? valor : 0,
     cidade: typeof d.cidade === 'string' ? d.cidade.trim() : '',
     uf: typeof d.uf === 'string' ? d.uf.toUpperCase().trim() : '',
@@ -324,7 +326,12 @@ export async function extraerDatosNfse(
               return !valorModelo || chaveComparacao(campo, valorModelo) === chaveComparacao(campo, String(valor));
             })
           : modelosCorrespondentes.length >= 2;
-        if (valor !== undefined && valor !== '' && modelosConcordam) {
+        // Para "servico" (Serviço Prestado), a evidência estrutural do rótulo
+        // prevalece: é o código + descrição oficial da legislação, distinto da
+        // "Descrição do Serviço" (informativo). Não deve ser descartado por
+        // divergência dos modelos que podem mezclar ambos campos.
+        const servicoPrevalece = campo === 'servico' && textoNativoPdf;
+        if (valor !== undefined && valor !== '' && (modelosConcordam || servicoPrevalece)) {
           (datosVotados as any)[campo] = valor;
           candidatos[campo] = [String(valor)];
           divergenciasResolvidas.add(campo);
@@ -335,6 +342,14 @@ export async function extraerDatosNfse(
       } else if (opcoes.length > 1) {
         candidatos[campo] = [...new Set([...(candidatos[campo] || []), ...opcoes])];
       }
+    }
+
+    // "Descrição do Serviço" é informativo (detalhamento), não para tributação.
+    // Se existe, se guarda como evidência e se verifica coherencia com o serviço prestado.
+    const descricao = rotulados.dados.servico_descricao;
+    if (descricao && descricao.trim()) {
+      (datosVotados as any).servico_descricao = descricao.trim();
+      candidatos.servico_descricao = [descricao.trim()];
     }
   }
   const divergentes = [...new Set([

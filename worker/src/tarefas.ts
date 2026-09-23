@@ -2,9 +2,9 @@
  * Durable Object para gerenciamento de tarefas assíncronas de análise.
  * Equivalente a backend/tarefas.py en Python.
  *
- * Ventajas de Durable Objects:
+ * Vantagens de Durable Objects:
  * - Estado persistente (sobrevive a restarts)
- * - Aislamiento por tarea
+ * - Isolamento por tarefa
  * - Confiable para polling
  */
 

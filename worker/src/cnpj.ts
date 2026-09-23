@@ -1,5 +1,5 @@
 /**
- * Consulta de CNPJ vía MinhaReceita.org con fallback BrasilAPI.
+ * Consulta de CNPJ via MinhaReceita.org com fallback BrasilAPI.
  * Equivalente a backend/cnpj.py en Python.
  */
 

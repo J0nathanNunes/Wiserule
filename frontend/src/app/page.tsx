@@ -30,6 +30,7 @@ type RevisaoOcr = {
   camposPerguntar: Array<'cnpj' | 'servico' | 'valor' | 'cidade' | 'uf'>;
   cnpj: string;
   servico: string;
+  servico_descricao: string;
   valor: string;
   cidade: string;
   uf: string;
@@ -47,10 +48,10 @@ const CAMPOS_REVISAO: Array<{ chave: 'cnpj' | 'servico' | 'valor' | 'cidade' | '
   { chave: 'uf', rotulo: 'UF do município da prestação' },
 ];
 
-// Decodifica el relatório de Base64 (el backend lo codifica para protegerlo del Durable Object)
+// Decodifica o relatório de Base64 (o backend o codifica para protegerlo do Durable Object)
 function decodificarRelatorio(texto: string): string {
   if (!texto) return texto;
-  // Si no parece Base64 (contiene caracteres no-Base64), devuelve el texto original
+  // Se não parece Base64 (contiene caracteres não-Base64), devuelve o texto original
   if (!/^[A-Za-z0-9+/=\s]+$/.test(texto)) return texto;
   try {
     const binario = atob(texto);
@@ -103,7 +104,7 @@ Sou um assistente especializado em análise de Notas Fiscais de Serviço. Posso 
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // En producción usa la URL del Worker; en dev usa el proxy local
+  // En produção usa a URL do Worker; en dev usa o proxy local
   const API_BASE = process.env.NEXT_PUBLIC_API_URL
     ? `${process.env.NEXT_PUBLIC_API_URL}/api`
     : '/api';
@@ -153,7 +154,7 @@ Sou um assistente especializado em análise de Notas Fiscais de Serviço. Posso 
         }
 
         if (data.status === 'concluido' && data.relatorio_completo) {
-          // Decodifica Base64 (el backend codifica el relatório para protegerlo del Durable Object)
+          // Decodifica Base64 (o backend codifica o relatório para protegerlo do Durable Object)
           const relatorio = decodificarRelatorio(data.relatorio_completo);
           const tempoTotal = inicioEm ? formatearTempo(Date.now() - inicioEm) : '';
           setMessages((prev) =>
@@ -291,6 +292,7 @@ Sou um assistente especializado em análise de Notas Fiscais de Serviço. Posso 
       camposPerguntar: [] as RevisaoOcr['camposPerguntar'],
       cnpj: dadosIniciais?.cnpj || String(extraidos.cnpj || ''),
       servico: dadosIniciais?.servico || String(extraidos.servico || ''),
+      servico_descricao: String(extraidos.servico_descricao || ''),
       valor: dadosIniciais?.valor || (extraidos.valor ? String(extraidos.valor).replace('.', ',') : ''),
       cidade: dadosIniciais?.cidade || String(extraidos.cidade || ''),
       uf: dadosIniciais?.uf || String(extraidos.uf || ''),
@@ -307,8 +309,8 @@ Sou um assistente especializado em análise de Notas Fiscais de Serviço. Posso 
         if (preenchidoManualmente) return false;
         const candidatosCampo = data.candidatos_ocr?.[chave] || [];
         const candidatoUnicoValido = candidatosCampo.length === 1 && validarRespostaCampo(chave, candidatosCampo[0]);
-        // Confianza alta: un único candidato válido y sin divergencia en el campo.
-        // Auto-completar sin preguntar; solo se pregunta lo vacío, ilegible o ambiguo.
+        // Confianza alta: um único candidato válido e sem divergência no campo.
+        // Auto-completar sem perguntar; só se pregunta o vazio, ilegible ou ambíguo.
         if (candidatoUnicoValido && !divergencias.has(chave)) {
           dadosRevisao[chave] = candidatosCampo[0];
           return false;
@@ -318,11 +320,26 @@ Sou um assistente especializado em análise de Notas Fiscais de Serviço. Posso 
       .map(({ chave }) => chave);
     const revisao = { ...dadosRevisao, camposPerguntar };
     setRevisaoOcr(revisao);
+    // Verifica coherencia entre "Serviço Prestado" (tributação) e
+    // "Descrição do Serviço" (informativo). Se há discrepancia grande, avisa.
+    const servicoPrestado = revisao.servico.trim();
+    const descricaoServicio = revisao.servico_descricao.trim();
+    let avisoDiscrepancia = '';
+    if (servicoPrestado && descricaoServicio) {
+      const palavrasServicio = new Set(servicoPrestado.toLowerCase().split(/\W+/).filter((p) => p.length > 3));
+      const palavrasDescricao = new Set(descricaoServicio.toLowerCase().split(/\W+/).filter((p) => p.length > 3));
+      const coincidencias = Array.from(palavrasServicio).filter((p) => palavrasDescricao.has(p)).length;
+      const total = Math.max(palavrasServicio.size, 1);
+      const similitud = coincidencias / total;
+      if (similitud < 0.3) {
+        avisoDiscrepancia = `\n\n⚠️ **Atenção:** a "Descrição do Serviço" ("${descricaoServicio.slice(0, 120)}...") não parece coincidir com o "Serviço Prestado" declarado ("${servicoPrestado.slice(0, 120)}..."). Verifique se o documento é correto antes de confiar na análise.`;
+      }
+    }
     if (camposPerguntar.length === 0) {
       // Todos os campos foram lidos com alta confianza (candidato único válido
-      // e sem divergência). Confirmar automaticamente e iniciar a análise.
+      // e sem divergência). Ir direto à análise fiscal, sem pedir confirmação.
       setRevisaoCampoIndex(null);
-      addMessage('assistant', 'A leitura encontrou todos os campos necessários com alta confianza. Não é preciso confirmar nada; inicio a análise.');
+      addMessage('assistant', `A leitura encontrou todos os campos necessários com alta confianza. Inicio a análise fiscal.${avisoDiscrepancia}`);
       await enviarDatosConferidos(revisao);
       return;
     }
@@ -429,6 +446,7 @@ Sou um assistente especializado em análise de Notas Fiscais de Serviço. Posso 
     payload.append('archivo', revisao.arquivo);
     payload.append('cnpj', revisao.cnpj);
     payload.append('servico', revisao.servico);
+    if (revisao.servico_descricao.trim()) payload.append('servico_descricao', revisao.servico_descricao.trim());
     payload.append('valor', revisao.valor);
     payload.append('cidade', revisao.cidade);
     payload.append('uf', revisao.uf);
