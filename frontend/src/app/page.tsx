@@ -255,7 +255,7 @@ Sou um assistente especializado em análise de Notas Fiscais de Serviço. Posso 
     }
   };
 
-  const abrirRevisaoOcr = (arquivo: File, texto: string, dadosIniciais: FormData | undefined, data: any) => {
+  const abrirRevisaoOcr = async (arquivo: File, texto: string, dadosIniciais: FormData | undefined, data: any) => {
     const extraidos = data.dados_extraidos || {};
     const dadosRevisao = {
       arquivo,
@@ -279,14 +279,26 @@ Sou um assistente especializado em análise de Notas Fiscais de Serviço. Posso 
       .filter(({ chave }) => {
         const valor = dadosRevisao[chave];
         const preenchidoManualmente = Boolean(dadosIniciais?.[chave]);
-        return !preenchidoManualmente && (!validarRespostaCampo(chave, valor) || (data.candidatos_ocr?.[chave] || []).length > 1);
+        if (preenchidoManualmente) return false;
+        const candidatosCampo = data.candidatos_ocr?.[chave] || [];
+        const candidatoUnicoValido = candidatosCampo.length === 1 && validarRespostaCampo(chave, candidatosCampo[0]);
+        // Confianza alta: un único candidato válido y sin divergencia en el campo.
+        // Auto-completar sin preguntar; solo se pregunta lo vacío, ilegible o ambiguo.
+        if (candidatoUnicoValido && !divergencias.has(chave)) {
+          dadosRevisao[chave] = candidatosCampo[0];
+          return false;
+        }
+        return !validarRespostaCampo(chave, valor) || candidatosCampo.length > 1;
       })
       .map(({ chave }) => chave);
     const revisao = { ...dadosRevisao, camposPerguntar };
     setRevisaoOcr(revisao);
     if (camposPerguntar.length === 0) {
+      // Todos os campos foram lidos com alta confianza (candidato único válido
+      // e sem divergência). Confirmar automaticamente e iniciar a análise.
       setRevisaoCampoIndex(null);
-      addMessage('assistant', 'A leitura encontrou os campos necessários sem divergências detectadas. Não vou pedir que você os redigite. Confira o resumo no painel e compare com o PDF/imagem antes de confirmar.');
+      addMessage('assistant', 'A leitura encontrou todos os campos necessários com alta confianza. Não é preciso confirmar nada; inicio a análise.');
+      await enviarDatosConferidos(revisao);
       return;
     }
     setRevisaoCampoIndex(0);
@@ -385,18 +397,17 @@ Sou um assistente especializado em análise de Notas Fiscais de Serviço. Posso 
     return Number.isFinite(Number(normalizado)) && Number(normalizado) > 0;
   };
 
-  const confirmarRevisaoOcr = async () => {
-    if (!revisaoOcr || !revisaoOcr.confirmouConferencia) return;
+  const enviarDatosConferidos = async (revisao: RevisaoOcr) => {
     setIsLoading(true);
     setStatusMsg('Enviando dados conferidos...');
     const payload = new FormData();
-    payload.append('archivo', revisaoOcr.arquivo);
-    payload.append('cnpj', revisaoOcr.cnpj);
-    payload.append('servico', revisaoOcr.servico);
-    payload.append('valor', revisaoOcr.valor);
-    payload.append('cidade', revisaoOcr.cidade);
-    payload.append('uf', revisaoOcr.uf);
-    if (revisaoOcr.texto.trim()) payload.append('mensaje', revisaoOcr.texto.trim());
+    payload.append('archivo', revisao.arquivo);
+    payload.append('cnpj', revisao.cnpj);
+    payload.append('servico', revisao.servico);
+    payload.append('valor', revisao.valor);
+    payload.append('cidade', revisao.cidade);
+    payload.append('uf', revisao.uf);
+    if (revisao.texto.trim()) payload.append('mensaje', revisao.texto.trim());
     payload.append('confirmar_dados', 'true');
     try {
       const response = await fetch(`${API_BASE}/analisar`, { method: 'POST', body: payload });
@@ -405,7 +416,7 @@ Sou um assistente especializado em análise de Notas Fiscais de Serviço. Posso 
         throw new Error(data.error || `HTTP ${response.status}`);
       }
       const mensagem = addMessage('assistant', '⏳ **Gerando análise com os dados conferidos...**');
-      URL.revokeObjectURL(revisaoOcr.urlOriginal);
+      URL.revokeObjectURL(revisao.urlOriginal);
       setRevisaoOcr(null);
       pollTask(data.dados_extraidos.task_id, mensagem.id);
     } catch (error) {
@@ -413,6 +424,11 @@ Sou um assistente especializado em análise de Notas Fiscais de Serviço. Posso 
       setIsLoading(false);
       setStatusMsg('');
     }
+  };
+
+  const confirmarRevisaoOcr = async () => {
+    if (!revisaoOcr || !revisaoOcr.confirmouConferencia) return;
+    await enviarDatosConferidos(revisaoOcr);
   };
 
   const enviarMensagem = async (texto: string, arquivo?: File | null) => {
