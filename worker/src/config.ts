@@ -21,8 +21,10 @@ export interface Env {
   GERANET_BASE_URL?: string;
   MAX_FILE_SIZE_MB?: string;
   MODELO_OCR?: string;
+  MODELO_OCR_ALT?: string;
   MODELO_ANALISE?: string;
   MODELO_VISAO?: string;
+  MODELO_VISAO_ALT?: string;
   CORS_ORIGINS?: string;
 }
 
@@ -36,9 +38,9 @@ export function getConfig(env: Env) {
     modeloOcr: env.MODELO_OCR || 'openai/gpt-4o-mini',
     modeloAnalise: env.MODELO_ANALISE || 'openai/gpt-4o-mini',
     modeloVision: env.MODELO_VISAO || 'openai/gpt-4o-mini',
-    // Modelos alternativos para redundância real (modelos diferentes = erros diferentes)
-    modeloOcrAlt: env.MODELO_OCR_ALT || 'google/gemini-2.0-flash-001',
-    modeloVisionAlt: env.MODELO_VISAO_ALT || 'anthropic/claude-3.5-sonnet',
+    // Modelo terciário multimodal para manter três extrações independentes.
+    modeloOcrAlt: env.MODELO_OCR_ALT || 'google/gemini-2.5-flash',
+    modeloVisionAlt: env.MODELO_VISAO_ALT || 'openai/gpt-6-luna-pro',
     corsOrigins: (env.CORS_ORIGINS || 'https://wiserule.com,https://www.wiserule.com,http://localhost:3000')
       .split(',')
       .map((s) => s.trim())
