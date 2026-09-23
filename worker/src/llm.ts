@@ -41,6 +41,7 @@ Extraia os seguintes dados da NFSe fornecida (imagem/PDF):
 - Data de emissão (se visível)
 
 Procure campos como "Prestador", "CNPJ", "Valor Total", "Município", "Descrição" na nota.
+Não confunda CNPJ do prestador com CNPJ do tomador. Para valor, informe o total dos serviços/nota, nunca ISS, retenções, descontos ou valor líquido quando houver um total geral separado. Para cidade/UF, use município da prestação/incidência quando identificado; não substitua pelo endereço do tomador.
 
 Retorne APENAS um JSON válido e nada mais, no formato exato:
 {"cnpj": "...", "servico": "...", "valor": 0.00, "cidade": "...", "uf": "...", "numero_nfse": "...", "data_emision": "..."}
@@ -55,12 +56,20 @@ Preste MUITA atenção em:
 - O CNPJ (14 dígitos) - verifique cada dígito
 - O valor total - verifique decimais
 - A cidade e UF
+Não confunda prestador com tomador. Extraia o total dos serviços/nota, não o ISS retido, os tributos ou o valor líquido se houver total geral separado.
 
 Retorne APENAS um JSON válido e nada mais, no formato exato:
 {"cnpj": "...", "servico": "...", "valor": 0.00, "cidade": "...", "uf": "...", "numero_nfse": "...", "data_emision": "..."}
 
 Se algum campo não estiver visível, use string vazia ou 0.0 para valor.
 NÃO invente dados.`;
+
+const SYSTEM_PROMPT_TRANSCRICAO_NFSE = `Transcreva o conteúdo visível desta Nota Fiscal de Serviço brasileira para texto simples.
+Preserve os rótulos, a ordem de leitura e as quebras de linha. Mantenha cada valor junto do rótulo a que pertence.
+Transcreva separadamente os blocos PRESTADOR/EMITENTE e TOMADOR/CLIENTE; não misture seus CNPJs.
+Mantenha todos os valores monetários e seus rótulos (valor dos serviços, valor líquido, ISS, retenções, total da nota).
+Não calcule, não corrija, não complete e não deduza conteúdo. Quando não conseguir ler, escreva [ilegível].
+Retorne somente a transcrição, sem resumo ou comentário.`;
 
 const SYSTEM_PROMPT_ANALISE = `Você é um analista fiscal sênior especializado em NFSe e direito tributário brasileiro.
 Analise os dados fornecidos e gere um relatório técnico-jurídico completo em Markdown.
@@ -229,19 +238,9 @@ export async function extraerDatosNfse(
     throw new Error('Formato não suportado. Envie uma NFSe em PNG, JPG ou PDF.');
   }
 
-  const evidenciaPdf = textoPdfExtraido
-    ? `\n\nTexto embutido no PDF (use como evidência; não presuma que todo CNPJ ou valor pertence ao prestador/total):\n${textoPdfExtraido.slice(0, 40000)}`
-    : '';
-  const mimeType = formato === 'pdf' ? 'application/pdf' : formato === 'png' ? 'image/png' : 'image/jpeg';
-  const anexo = formato === 'pdf'
-    ? { type: 'file', file: { filename: 'nfse.pdf', file_data: `data:application/pdf;base64,${archivoBase64}` } }
-    : { type: 'image_url', image_url: { url: `data:${mimeType};base64,${archivoBase64}` } };
-  const criarMensagens = (prompt: string, instrucao: string) => [
-    { role: 'system', content: prompt },
-    { role: 'user', content: [{ type: 'text', text: `${instrucao}${evidenciaPdf}` }, anexo] },
-  ];
-
-  // Falhas de chamada ou JSON inválido não participam do voto.
+  const textoNativoPdf = formato === 'pdf' && Boolean(textoPdfExtraido?.trim());
+  // O modelo de transcrição é excluído da confirmação dos campos que transcreveu.
+  let modeloTranscricao: string | undefined = textoNativoPdf ? undefined : config.modeloOcr;
   const nomesModelos = [config.modeloVision, config.modeloVisionAlt, config.modeloOcrAlt];
   if (new Set(nomesModelos).size !== nomesModelos.length) {
     return {
@@ -253,6 +252,35 @@ export async function extraerDatosNfse(
       erros: ['A extração foi bloqueada: configure três identificadores de modelo distintos para reduzir votos correlacionados.'],
     };
   }
+  let textoDocumento = textoPdfExtraido?.trim() || '';
+  let erroTranscricao: string | undefined;
+  if (!textoDocumento) {
+    const mime = formato === 'pdf' ? 'application/pdf' : formato === 'png' ? 'image/png' : 'image/jpeg';
+    const arquivoVisual = formato === 'pdf'
+      ? { type: 'file', file: { filename: 'nfse.pdf', file_data: `data:application/pdf;base64,${archivoBase64}` } }
+      : { type: 'image_url', image_url: { url: `data:${mime};base64,${archivoBase64}` } };
+    const transcricao = await llamarLlm([
+      { role: 'system', content: SYSTEM_PROMPT_TRANSCRICAO_NFSE },
+      { role: 'user', content: [{ type: 'text', text: 'Transcreva fielmente todos os campos legíveis e preserve rótulos e linhas.' }, arquivoVisual] },
+    ], config, apiKey, config.modeloOcr, 0.1, 6000);
+    modeloTranscricao = config.modeloOcr;
+    if (transcricao.ok && transcricao.content?.trim()) textoDocumento = transcricao.content.trim();
+    else erroTranscricao = transcricao.error || 'A transcrição visual não retornou texto.';
+  }
+
+  const evidenciaPdf = textoDocumento
+    ? `\n\n${textoNativoPdf ? 'Texto embutido no PDF' : 'Transcrição auxiliar do documento (pode conter erros de OCR)'}; use os rótulos e mantenha prestador/tomador e cada tipo de valor separados. Não invente nem complete dados:\n${textoDocumento.slice(0, 40000)}`
+    : '';
+  const mimeType = formato === 'pdf' ? 'application/pdf' : formato === 'png' ? 'image/png' : 'image/jpeg';
+  const anexo = formato === 'pdf'
+    ? { type: 'file', file: { filename: 'nfse.pdf', file_data: `data:application/pdf;base64,${archivoBase64}` } }
+    : { type: 'image_url', image_url: { url: `data:${mimeType};base64,${archivoBase64}` } };
+  const criarMensagens = (prompt: string, instrucao: string) => [
+    { role: 'system', content: prompt },
+    { role: 'user', content: [{ type: 'text', text: `${instrucao}${evidenciaPdf}` }, anexo] },
+  ];
+
+  // Falhas de chamada ou JSON inválido não participam do voto.
   const [res1, res2, res3] = await Promise.all([
     llamarLlm(criarMensagens(SYSTEM_PROMPT_OCR, 'Extraia os dados desta NFSe e retorne APENAS o JSON.'), config, apiKey, config.modeloVision, 0.1),
     llamarLlm(criarMensagens(SYSTEM_PROMPT_OCR_VERIFICACION, 'Verifique novamente os dados desta NFSe e retorne APENAS o JSON.'), config, apiKey, config.modeloVisionAlt, 0.1),
@@ -260,13 +288,59 @@ export async function extraerDatosNfse(
   ]);
   const respostas = [res1, res2, res3];
   const extracoes = respostas.map((res) => res.ok ? extraerJson(res.content || '') : null);
-  const votosValidos = extracoes.filter((d): d is DadosExtraidos => d !== null).map(normalizarDados);
-  const { dados: datosVotados, divergentes, confianza } = votarDados(votosValidos);
+  const votosComModelo = extracoes.flatMap((dados, indice) => dados
+    ? [{ dados: normalizarDados(dados), modelo: nomesModelos[indice] }]
+    : []);
+  const votosValidos = votosComModelo.map(({ dados }) => dados);
+  const { dados: datosVotados, divergentes: divergenciasModelos, confianza } = votarDados(votosValidos);
   const campos = ['cnpj', 'servico', 'valor', 'cidade', 'uf'] as const;
-  const candidatos = Object.fromEntries(campos.map((campo) => [
+  const candidatos: ResultadoOcr['candidatos'] = Object.fromEntries(campos.map((campo) => [
     campo,
     [...new Set(votosValidos.map((dados) => String(dados[campo] ?? '').trim()).filter(Boolean))],
   ])) as ResultadoOcr['candidatos'];
+
+  // Extrai dados associados a rótulos explícitos. Em texto nativo de PDF, é evidência
+  // estrutural; em imagens/PDFs escaneados, a transcrição é auxiliar e precisa ser
+  // corroborada por pelo menos dois modelos visuais independentes.
+  const divergenciasResolvidas = new Set<string>();
+  if (textoDocumento) {
+    const { extrairDadosRotuladosNfse } = await import('./validacoes');
+    const rotulados = extrairDadosRotuladosNfse(textoDocumento);
+    for (const campo of campos) {
+      const opcoes = rotulados.candidatos[campo] || [];
+      if (opcoes.length === 1) {
+        const valor = rotulados.dados[campo];
+        const modelosCorrespondentes = votosComModelo.filter(({ dados: extracao, modelo }) => {
+          // O transcritor não pode votar também como corroborador do próprio OCR.
+          if (modeloTranscricao && modelo === modeloTranscricao) return false;
+          const valorModelo = String(extracao[campo] ?? '').trim();
+          return valorModelo && chaveComparacao(campo, valorModelo) === chaveComparacao(campo, String(valor));
+        });
+        // Texto nativo do PDF pode preencher o campo quando inequívoco e não contestado.
+        // Transcrição de imagem/PDF escaneado exige confirmação de pelo menos 2 modelos visuais.
+        const modelosConcordam = textoNativoPdf
+          ? votosValidos.every((extracao) => {
+              const valorModelo = String(extracao[campo] ?? '').trim();
+              return !valorModelo || chaveComparacao(campo, valorModelo) === chaveComparacao(campo, String(valor));
+            })
+          : modelosCorrespondentes.length >= 2;
+        if (valor !== undefined && valor !== '' && modelosConcordam) {
+          (datosVotados as any)[campo] = valor;
+          candidatos[campo] = [String(valor)];
+          divergenciasResolvidas.add(campo);
+        } else if (valor !== undefined && valor !== '') {
+          candidatos[campo] = [...new Set([String(valor), ...(candidatos[campo] || [])])];
+          divergenciasResolvidas.delete(campo);
+        }
+      } else if (opcoes.length > 1) {
+        candidatos[campo] = [...new Set([...(candidatos[campo] || []), ...opcoes])];
+      }
+    }
+  }
+  const divergentes = [...new Set([
+    ...divergenciasModelos.filter((campo) => !divergenciasResolvidas.has(campo)),
+    ...campos.filter((campo) => candidatos[campo].length > 1),
+  ])];
 
   const { validarDadosExtraidos, validarCnpj } = await import('./validacoes');
   const validacao = validarDadosExtraidos(datosVotados);
@@ -277,6 +351,8 @@ export async function extraerDatosNfse(
     dadosFinais.cnpj = '';
   }
   const erros = [...validacao.erros];
+  if (erroTranscricao) erros.push(`Transcrição auxiliar: ${erroTranscricao}`);
+  if (textoDocumento && !textoNativoPdf) erros.push('A transcrição visual é auxiliar; confira todos os campos na imagem/PDF original.');
   if (votosValidos.length < 2) {
     erros.push(`Redundância insuficiente: apenas ${votosValidos.length} de 3 modelos produziram JSON válido; confirme os dados na NFSe.`);
   }

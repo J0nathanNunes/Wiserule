@@ -27,6 +27,7 @@ type RevisaoOcr = {
   texto: string;
   confirmouConferencia: boolean;
   cidadeUfManual: boolean;
+  camposPerguntar: Array<'cnpj' | 'servico' | 'valor' | 'cidade' | 'uf'>;
   cnpj: string;
   servico: string;
   valor: string;
@@ -256,12 +257,13 @@ Sou um assistente especializado em análise de Notas Fiscais de Serviço. Posso 
 
   const abrirRevisaoOcr = (arquivo: File, texto: string, dadosIniciais: FormData | undefined, data: any) => {
     const extraidos = data.dados_extraidos || {};
-    setRevisaoOcr({
+    const dadosRevisao = {
       arquivo,
       urlOriginal: URL.createObjectURL(arquivo),
       texto,
       confirmouConferencia: false,
       cidadeUfManual: Boolean(dadosIniciais?.cidade || dadosIniciais?.uf),
+      camposPerguntar: [] as RevisaoOcr['camposPerguntar'],
       cnpj: dadosIniciais?.cnpj || String(extraidos.cnpj || ''),
       servico: dadosIniciais?.servico || String(extraidos.servico || ''),
       valor: dadosIniciais?.valor || (extraidos.valor ? String(extraidos.valor).replace('.', ',') : ''),
@@ -271,21 +273,46 @@ Sou um assistente especializado em análise de Notas Fiscais de Serviço. Posso 
       divergencias: data.campos_divergentes || [],
       confiança: Number(data['confiança_ocr'] || 0),
       erros: data.erros_ocr || [],
-    });
+    };
+    const divergencias = new Set<string>(data.campos_divergentes || []);
+    const camposPerguntar = CAMPOS_REVISAO
+      .filter(({ chave }) => {
+        const valor = dadosRevisao[chave];
+        const preenchidoManualmente = Boolean(dadosIniciais?.[chave]);
+        return !preenchidoManualmente && (!validarRespostaCampo(chave, valor) || (data.candidatos_ocr?.[chave] || []).length > 1);
+      })
+      .map(({ chave }) => chave);
+    const revisao = { ...dadosRevisao, camposPerguntar };
+    setRevisaoOcr(revisao);
+    if (camposPerguntar.length === 0) {
+      setRevisaoCampoIndex(null);
+      addMessage('assistant', 'A leitura encontrou os campos necessários sem divergências detectadas. Não vou pedir que você os redigite. Confira o resumo no painel e compare com o PDF/imagem antes de confirmar.');
+      return;
+    }
     setRevisaoCampoIndex(0);
-    addMessage('assistant', perguntaCampoRevisao(0, {
-      cnpj: dadosIniciais?.cnpj || String(extraidos.cnpj || ''),
-      servico: dadosIniciais?.servico || String(extraidos.servico || ''),
-      valor: dadosIniciais?.valor || (extraidos.valor ? String(extraidos.valor).replace('.', ',') : ''),
-      cidade: dadosIniciais?.cidade || String(extraidos.cidade || ''),
-      uf: dadosIniciais?.uf || String(extraidos.uf || ''),
-    }, data.candidatos_ocr || {}));
+    addMessage('assistant', perguntaCampoRevisao(camposPerguntar[0], revisao, data.candidatos_ocr || {}, data.erros_ocr || []));
+    const camposConflitantes = CAMPOS_REVISAO.filter(({ chave }) => (data.candidatos_ocr?.[chave] || []).length > 1);
+    if (camposConflitantes.length) {
+      addMessage('assistant', `Atenção: encontrei mais de uma leitura para ${camposConflitantes.map(({ rotulo }) => rotulo).join(', ')}. Vou perguntar esses campos no chat e não vou selecionar um automaticamente.`);
+    }
+    if (camposPerguntar.length < CAMPOS_REVISAO.length) {
+      const legiveis = CAMPOS_REVISAO
+        .filter(({ chave }) => !camposPerguntar.includes(chave))
+        .map(({ chave, rotulo }) => `${rotulo}: ${revisao[chave]}`);
+      if (legiveis.length) addMessage('assistant', `Já consegui ler estes campos e não vou pedir que os redigite: ${legiveis.join(' · ')}. Confira-os no original antes da confirmação final.`);
+    }
   };
 
-  const perguntaCampoRevisao = (indice: number, dados: Pick<RevisaoOcr, 'cnpj' | 'servico' | 'valor' | 'cidade' | 'uf'>, candidatos: Record<string, string[]>) => {
-    const campo = CAMPOS_REVISAO[indice];
+  const perguntaCampoRevisao = (chave: RevisaoOcr['camposPerguntar'][number], dados: Pick<RevisaoOcr, 'cnpj' | 'servico' | 'valor' | 'cidade' | 'uf'>, candidatos: Record<string, string[]>, erros: string[] = []) => {
+    const campo = CAMPOS_REVISAO.find(({ chave: chaveCampo }) => chaveCampo === chave)!;
     const atual = dados[campo.chave].trim();
     const alternativas = candidatos[campo.chave] || [];
+    if (alternativas.length > 1) {
+      return `Os leitores encontraram valores diferentes para **${campo.rotulo}**: ${alternativas.map((valor) => `“${valor}”`).join(', ')}. Confira o campo no arquivo original e digite exatamente o valor que aparece. Se estiver ilegível, responda **não consigo ler**; não vou escolher nem completar por conta própria.`;
+    }
+    if (alternativas.length === 1 && validarRespostaCampo(chave, alternativas[0])) {
+      return `Consegui ler **${campo.rotulo}** diretamente do texto da NFSe, junto ao rótulo do documento: “${alternativas[0]}”. A extração automática não basta para confirmar o dado. Compare com o original e responda **correto** se estiver igual, ou envie o valor exato que aparece na nota.${erros.length ? ` Observação: ${erros.join('; ')}` : ''}`;
+    }
     const sugestao = atual ? ` A leitura automática sugere: “${atual}”.` : ' A leitura automática não conseguiu determinar este campo.';
     const divergencia = alternativas.length > 1 ? ` Os modelos deram leituras diferentes: ${alternativas.map((item) => `“${item}”`).join(', ')}.` : '';
     return `Para não presumir nem inventar dados, confira no arquivo original e informe **${campo.rotulo}**.${sugestao}${divergencia} Digite o valor correto; se a sugestão estiver exatamente correta, responda **correto**.`;
@@ -293,7 +320,8 @@ Sou um assistente especializado em análise de Notas Fiscais de Serviço. Posso 
 
   const responderDuvidaOcr = (resposta: string) => {
     if (!revisaoOcr || revisaoCampoIndex === null) return;
-    const campo = CAMPOS_REVISAO[revisaoCampoIndex];
+    const chaveCampo = revisaoOcr.camposPerguntar[revisaoCampoIndex];
+    const campo = CAMPOS_REVISAO.find(({ chave }) => chave === chaveCampo)!;
     const texto = resposta.trim();
     const confirmaSugestao = /^(correto|correta|confirmo|confirmado|confirmada|sim|certo|certa|ok|est[aá] correto|est[aá] correta)[.! ]*$/i.test(texto);
     if (/^(n[aã]o sei|n[aã]o consigo ler|ileg[ií]vel|desconhecido|desconhecida|\?)\W*$/i.test(texto)) {
@@ -303,6 +331,10 @@ Sou um assistente especializado em análise de Notas Fiscais de Serviço. Posso 
     }
     const valorAtual = revisaoOcr[campo.chave].trim();
     addMessage('user', texto);
+    if (confirmaSugestao && (revisaoOcr.candidatos[campo.chave] || []).length > 1) {
+      addMessage('assistant', `Como há mais de uma leitura para **${campo.rotulo}**, não posso aceitar “correto” sem saber qual delas consta na NFSe. Digite o valor exato do documento.`);
+      return;
+    }
     if (confirmaSugestao && (!valorAtual || !validarRespostaCampo(campo.chave, valorAtual))) {
       addMessage('assistant', `Não há uma sugestão válida para **${campo.rotulo}**. Consulte o documento e digite o valor correto; não posso completar ou aceitar este dado por suposição.`);
       return;
@@ -316,14 +348,17 @@ Sou um assistente especializado em análise de Notas Fiscais de Serviço. Posso 
     const dadosAtualizados = { ...revisaoOcr, [campo.chave]: valorConfirmado, confirmouConferencia: false };
     setRevisaoOcr(dadosAtualizados);
     const proximoIndice = revisaoCampoIndex + 1;
-    if (proximoIndice < CAMPOS_REVISAO.length) {
+    if (proximoIndice < revisaoOcr.camposPerguntar.length) {
       setRevisaoCampoIndex(proximoIndice);
-      addMessage('assistant', perguntaCampoRevisao(proximoIndice, dadosAtualizados, revisaoOcr.candidatos));
+      addMessage('assistant', perguntaCampoRevisao(revisaoOcr.camposPerguntar[proximoIndice], dadosAtualizados, revisaoOcr.candidatos, revisaoOcr.erros));
       return;
     }
 
     setRevisaoCampoIndex(null);
-    addMessage('assistant', `Respostas registradas para conferência:\n\n- CNPJ do prestador: ${dadosAtualizados.cnpj}\n- Serviço: ${dadosAtualizados.servico}\n- Valor: ${dadosAtualizados.valor}\n- Município: ${dadosAtualizados.cidade}\n- UF: ${dadosAtualizados.uf}\n\nCompare com o documento original. A análise ainda está bloqueada até você marcar a confirmação final no painel.`);
+    const notaDivergencias = dadosAtualizados.divergencias.length
+      ? `\n\nOs modelos divergiram nestes campos: ${dadosAtualizados.divergencias.join(', ')}. Confirme cada um visualmente no arquivo original.`
+      : '';
+    addMessage('assistant', `Respostas registradas para conferência:\n\n- CNPJ do prestador: ${dadosAtualizados.cnpj}\n- Serviço: ${dadosAtualizados.servico}\n- Valor: ${dadosAtualizados.valor}\n- Município: ${dadosAtualizados.cidade}\n- UF: ${dadosAtualizados.uf}${notaDivergencias}\n\nCompare com o documento original. A análise ainda está bloqueada até você marcar a confirmação final no painel.`);
   };
 
   const validarRespostaCampo = (campo: 'cnpj' | 'servico' | 'valor' | 'cidade' | 'uf', valor: string): boolean => {
@@ -428,13 +463,6 @@ Sou um assistente especializado em análise de Notas Fiscais de Serviço. Posso 
       });
 
       const data = await response.json();
-
-      if (!response.ok || data.status === 'erro' || data.status === 'error') {
-        addMessage('assistant', `❌ **Erro na análise:** ${data.error || data.erro || `HTTP ${response.status}`}`);
-        setIsLoading(false);
-        setStatusMsg('');
-        return;
-      }
 
       const assistantMsg = addMessage('assistant', '⏳ **Analisando...**');
 

@@ -11,29 +11,57 @@ import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
  */
 export async function extrairTextoPdf(pdfBytes: Uint8Array): Promise<string> {
   try {
-    // Desabilita worker (não disponível em Cloudflare Workers)
+    // Desabilita worker (não disponível em Cloudflare Workers).
     pdfjsLib.GlobalWorkerOptions.workerSrc = '';
-
     const loadingTask = pdfjsLib.getDocument({
       data: pdfBytes,
-      disableWorker: true,
       isEvalSupported: false,
       useSystemFonts: false,
     });
 
     const pdf = await loadingTask.promise;
-    const numPaginas = pdf.numPages;
     const textos: string[] = [];
-
-    for (let i = 1; i <= numPaginas; i++) {
+    for (let i = 1; i <= pdf.numPages; i++) {
       const pagina = await pdf.getPage(i);
       const conteudo = await pagina.getTextContent();
-      const textoPagina = conteudo.items
-        .map((item: any) => ('str' in item ? item.str : ''))
-        .join(' ');
+      const itens = conteudo.items
+        .filter((item: any) => 'str' in item && item.str.trim())
+        .map((item: any) => ({
+          texto: item.str.trim(),
+          x: Number(item.transform?.[4] || 0),
+          y: Number(item.transform?.[5] || 0),
+          largura: Number(item.width || 0),
+        }))
+        .sort((a: any, b: any) => b.y - a.y || a.x - b.x);
+
+      // PDF.js retorna fragmentos posicionados; agrupá-los por linha conserva
+      // rótulos e valores lado a lado (ex.: "CNPJ: 00..."), em vez de achatar a página.
+      const linhas: Array<{ y: number; itens: typeof itens }> = [];
+      for (const item of itens) {
+        let linha = linhas.find((candidata) => Math.abs(candidata.y - item.y) <= 2.5);
+        if (!linha) {
+          linha = { y: item.y, itens: [] };
+          linhas.push(linha);
+        }
+        linha.itens.push(item);
+      }
+
+      const textoPagina = linhas
+        .sort((a, b) => b.y - a.y)
+        .map((linha) => {
+          const ordenados = linha.itens.sort((a, b) => a.x - b.x);
+          let resultado = '';
+          let finalAnterior = Number.NEGATIVE_INFINITY;
+          for (const item of ordenados) {
+            const espaco = resultado && item.x - finalAnterior > 3 ? ' ' : '';
+            resultado += espaco + item.texto;
+            finalAnterior = item.x + item.largura;
+          }
+          return resultado;
+        })
+        .join('\n');
       textos.push(textoPagina);
     }
-
     return textos.join('\n\n');
   } catch (e) {
     console.error('[PDF] Erro ao extrair texto:', e);
@@ -41,19 +69,3 @@ export async function extrairTextoPdf(pdfBytes: Uint8Array): Promise<string> {
   }
 }
 
-/**
- * Converte primeira página de PDF para imagem PNG (base64).
- * Útil quando o PDF é escaneado (sem camada de texto).
- */
-export async function pdfParaImagem(
-  pdfBytes: Uint8Array,
-): Promise<string | null> {
-  try {
-    // Nota: pdfjs-dist não renderiza para imagem diretamente.
-    // Para isso, seria necessário pdf2pic ou similar.
-    // Por enquanto, retornamos null e usamos o PDF como imagem para o LLM.
-    return null;
-  } catch {
-    return null;
-  }
-}
