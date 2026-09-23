@@ -65,7 +65,7 @@ export default function DebugModal({ isOpen, onClose }: { isOpen: boolean; onClo
     try {
       const t0 = Date.now();
       const form = new FormData();
-      form.append('cnpj', '11222333000144');
+      form.append('cnpj', '12345678901230');
       form.append('servico', 'Desenvolvimento de software');
       form.append('valor', '1000');
       form.append('cidade', 'Campo Grande');

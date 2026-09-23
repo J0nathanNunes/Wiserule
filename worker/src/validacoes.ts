@@ -238,8 +238,9 @@ export function extrairDadosRotuladosNfse(texto: string): DadosRotuladosNfse {
   if (cnpjPontuados.length) {
     const maior = Math.max(...cnpjPontuados.map((item) => item.pontos));
     const valores = [...new Set(cnpjPontuados.filter((item) => item.pontos === maior).map((item) => item.valor))];
-    candidatos.cnpj = valores;
-    if (valores.length === 1) dados.cnpj = valores[0];
+    const cnpjsValidos = valores.filter((valor) => validarCnpj(valor));
+    candidatos.cnpj = cnpjsValidos.length ? cnpjsValidos : valores;
+    if (candidatos.cnpj.length === 1 && cnpjsValidos.length === 1) dados.cnpj = cnpjsValidos[0];
   }
 
   const valoresServico: string[] = [];

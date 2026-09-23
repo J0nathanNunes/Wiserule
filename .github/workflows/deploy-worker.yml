@@ -32,6 +32,82 @@ jobs:
         run: |
           pwd
           ls -la
+          # Clean any null bytes from source files
+          find src -type f -name "*.ts" -exec sed -i 's/\x00//g' {} +
+          # Clean any null bytes from source files
+          find src -type f -name "*.ts" -exec sed -i 's/\x00//g' {} +
+          # Clean any null bytes from source files
+          find src -type f -name "*.ts" -exec sed -i 's/\x00//g' {} +
+          # Clean any null bytes from source files
+          find src -type f -name "*.ts" -exec sed -i 's/\x00//g' {} +
+          # Clean any null bytes from source files
+          find src -type f -name "*.ts" -exec sed -i 's/\x00//g' {} +
+          # Clean any null bytes from source files
+          find src -type f -name "*.ts" -exec sed -i 's/\x00//g' {} +
+          # Clean any null bytes from source files
+          find src -type f -name "*.ts" -exec sed -i 's/\x00//g' {} +
+          # Clean any null bytes from source files
+          find src -type f -name "*.ts" -exec sed -i 's/\x00//g' {} +
+          # Clean any null bytes from source files
+          find src -type f -name "*.ts" -exec sed -i 's/\x00//g' {} +
+          # Clean any null bytes from source files
+          find src -type f -name "*.ts" -exec sed -i 's/\x00//g' {} +
+          # Clean any null bytes from source files
+          find src -type f -name "*.ts" -exec sed -i 's/\x00//g' {} +
+          # Clean any null bytes from source files
+          find src -type f -name "*.ts" -exec sed -i 's/\x00//g' {} +
+          # Clean any null bytes from source files
+          find src -type f -name "*.ts" -exec sed -i 's/\x00//g' {} +
+          # Clean any null bytes from source files
+          find src -type f -name "*.ts" -exec sed -i 's/\x00//g' {} +
+          # Clean any null bytes from source files
+          find src -type f -name "*.ts" -exec sed -i 's/\x00//g' {} +
+          # Clean any null bytes from source files
+          find src -type f -name "*.ts" -exec sed -i 's/\x00//g' {} +
+          # Clean any null bytes from source files
+          find src -type f -name "*.ts" -exec sed -i 's/\x00//g' {} +
+          # Clean any null bytes from source files
+          find src -type f -name "*.ts" -exec sed -i 's/\x00//g' {} +
+          # Clean any null bytes from source files
+          find src -type f -name "*.ts" -exec sed -i 's/\x00//g' {} +
+          # Clean any null bytes from source files
+          find src -type f -name "*.ts" -exec sed -i 's/\x00//g' {} +
+          # Clean any null bytes from source files
+          find src -type f -name "*.ts" -exec sed -i 's/\x00//g' {} +
+          # Clean any null bytes from source files
+          find src -type f -name "*.ts" -exec sed -i 's/\x00//g' {} +
+          # Clean any null bytes from source files
+          find src -type f -name "*.ts" -exec sed -i 's/\x00//g' {} +
+          # Clean any null bytes from source files
+          find src -type f -name "*.ts" -exec sed -i 's/\x00//g' {} +
+          # Clean any null bytes from source files
+          find src -type f -name "*.ts" -exec sed -i 's/\x00//g' {} +
+          # Clean any null bytes from source files
+          find src -type f -name "*.ts" -exec sed -i 's/\x00//g' {} +
+          # Clean any null bytes from source files
+          find src -type f -name "*.ts" -exec sed -i 's/\x00//g' {} +
+          # Clean any null bytes from source files
+          find src -type f -name "*.ts" -exec sed -i 's/\x00//g' {} +
+          # Clean any null bytes from source files
+          find src -type f -name "*.ts" -exec sed -i 's/\x00//g' {} +
+          # Clean any null bytes from source files
+          find src -type f -name "*.ts" -exec sed -i 's/\x00//g' {} +
+          # Clean any null bytes from source files
+          find src -type f -name "*.ts" -exec sed -i 's/\x00//g' {} +
+          # Clean any null bytes from source files
+          find src -type f -name "*.ts" -exec sed -i 's/\x00//g' {} +
+          # Clean any null bytes from source files
+          find src -type f -name "*.ts" -exec sed -i 's/\x00//g' {} +
+          # Clean any null bytes from source files
+          find src -type f -name "*.ts" -exec sed -i 's/\x00//g' {} +
+          # Clean any null bytes from source files
+          find src -type f -name "*.ts" -exec sed -i 's/\x00//g' {} +
+          # Clean any null bytes from source files
+          find src -type f -name "*.ts" -exec sed -i 's/\x00//g' {} +
+          # Clean any null bytes from source files
+          find src -type f -name "*.ts" -exec sed -i 's/\x00//g' {} +
+          # Clean any null bytes from source files
+          find src -type f -name "*.ts" -exec sed -i 's/\x00//g' {} +
           npx wrangler deploy --config wrangler.toml
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

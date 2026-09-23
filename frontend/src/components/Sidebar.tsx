@@ -24,8 +24,8 @@ export default function Sidebar({ isOpen, onToggle, onSubmit, isLoading, onNovaA
     cnpj: '',
     servico: '',
     valor: '',
-    cidade: 'Campo Grande',
-    uf: 'MS',
+    cidade: '',
+    uf: '',
   });
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -45,8 +45,14 @@ export default function Sidebar({ isOpen, onToggle, onSubmit, isLoading, onNovaA
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      if (!['image/png', 'image/jpeg', 'application/pdf'].includes(file.type) && !/\.(png|jpe?g|pdf)$/i.test(file.name)) {
+        alert('Formato não suportado. Use PNG, JPG ou PDF.');
+        e.target.value = '';
+        return;
+      }
       if (file.size > 5 * 1024 * 1024) {
         alert('Arquivo muito grande. Máximo 5MB.');
+        e.target.value = '';
         return;
       }
       setSelectedFile(file);
@@ -157,6 +163,7 @@ export default function Sidebar({ isOpen, onToggle, onSubmit, isLoading, onNovaA
               className="w-full bg-slate-700 text-white rounded-lg px-3 py-2 text-sm border border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
               disabled={isLoading}
             >
+              <option value="">Detectar pela NFSe</option>
               <option value="MS">MS</option>
               <option value="AC">AC</option>
               <option value="AL">AL</option>

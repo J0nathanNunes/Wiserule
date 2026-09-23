@@ -335,12 +335,14 @@ Sou um assistente especializado em análise de Notas Fiscais de Serviço. Posso 
       addMessage('assistant', `Como há mais de uma leitura para **${campo.rotulo}**, não posso aceitar “correto” sem saber qual delas consta na NFSe. Digite o valor exato do documento.`);
       return;
     }
-    if (confirmaSugestao && (!valorAtual || !validarRespostaCampo(campo.chave, valorAtual))) {
+    const candidatoAtual = revisaoOcr.candidatos[campo.chave] || [];
+    const sugestaoConfirmavel = candidatoAtual.length === 1 ? candidatoAtual[0] : valorAtual;
+    if (confirmaSugestao && (!sugestaoConfirmavel || !validarRespostaCampo(campo.chave, sugestaoConfirmavel))) {
       addMessage('assistant', `Não há uma sugestão válida para **${campo.rotulo}**. Consulte o documento e digite o valor correto; não posso completar ou aceitar este dado por suposição.`);
       return;
     }
 
-    const valorConfirmado = confirmaSugestao ? valorAtual : texto;
+    const valorConfirmado = confirmaSugestao ? sugestaoConfirmavel : texto;
     if (!confirmaSugestao && !validarRespostaCampo(campo.chave, valorConfirmado)) {
       addMessage('assistant', `Esse valor não passou na validação básica de **${campo.rotulo}**. Confira o documento e envie novamente; não vou avançar nem completar o dado automaticamente.`);
       return;

@@ -217,9 +217,9 @@ function chaveComparacao(campo: keyof DadosExtraidos, valor: string): string {
  * OCR com conferência cruzada e redundância real.
  *
  * Estratégia de redundância com confirmação por maioria:
- * 1. Extração primária: GPT-4o-mini (modelo A)
- * 2. Extração secundária: Claude 3.5 Sonnet (modelo B - diferente do A)
- * 3. Extração terciária: Gemini 2.0 Flash (modelo C - diferente de A e B)
+ * 1. Extração primária: modelo visual configurado (modelo A)
+ * 2. Extração secundária: segundo modelo visual configurado (modelo B)
+ * 3. Extração terciária: terceiro modelo visual configurado (modelo C)
  * 4. Voto majoritário: campo que aparece em 2+ extrações vence
  * 5. Validação: CNPJ (DV), UF (lista oficial), valor (positivo e razoável)
  * 6. Divergências sem maioria são devolvidas para confirmação humana.
