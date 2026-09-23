@@ -21,6 +21,23 @@ type FormData = {
   uf: string;
 };
 
+// Decodifica el relatório de Base64 (el backend lo codifica para protegerlo del Durable Object)
+function decodificarRelatorio(texto: string): string {
+  if (!texto) return texto;
+  // Si no parece Base64 (contiene caracteres no-Base64), devuelve el texto original
+  if (!/^[A-Za-z0-9+/=\s]+$/.test(texto)) return texto;
+  try {
+    const binario = atob(texto);
+    const bytes = new Uint8Array(binario.length);
+    for (let i = 0; i < binario.length; i++) {
+      bytes[i] = binario.charCodeAt(i);
+    }
+    return new TextDecoder('utf-8').decode(bytes);
+  } catch {
+    return texto;
+  }
+}
+
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -88,9 +105,11 @@ Sou um assistente especializado em análise de Notas Fiscais de Serviço. Posso 
         setStatusMsg(data.etapa_atual || `Analisando... (${data.progresso || 0}%)`);
 
         if (data.status === 'concluido' && data.relatorio_completo) {
+          // Decodifica Base64 (el backend codifica el relatório para protegerlo del Durable Object)
+          const relatorio = decodificarRelatorio(data.relatorio_completo);
           setMessages((prev) =>
             prev.map((m) =>
-              m.id === assistantMsgId ? { ...m, content: data.relatorio_completo } : m
+              m.id === assistantMsgId ? { ...m, content: relatorio } : m
             )
           );
           setIsLoading(false);
