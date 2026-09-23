@@ -21,6 +21,31 @@ type FormData = {
   uf: string;
 };
 
+type RevisaoOcr = {
+  arquivo: File;
+  urlOriginal: string;
+  texto: string;
+  confirmouConferencia: boolean;
+  cidadeUfManual: boolean;
+  cnpj: string;
+  servico: string;
+  valor: string;
+  cidade: string;
+  uf: string;
+  candidatos: Record<string, string[]>;
+  divergencias: string[];
+  confiança: number;
+  erros: string[];
+};
+
+const CAMPOS_REVISAO: Array<{ chave: 'cnpj' | 'servico' | 'valor' | 'cidade' | 'uf'; rotulo: string }> = [
+  { chave: 'cnpj', rotulo: 'CNPJ do prestador' },
+  { chave: 'servico', rotulo: 'descrição do serviço' },
+  { chave: 'valor', rotulo: 'valor total da nota (em reais)' },
+  { chave: 'cidade', rotulo: 'município da prestação' },
+  { chave: 'uf', rotulo: 'UF do município da prestação' },
+];
+
 // Decodifica el relatório de Base64 (el backend lo codifica para protegerlo del Durable Object)
 function decodificarRelatorio(texto: string): string {
   if (!texto) return texto;
@@ -67,6 +92,8 @@ Sou um assistente especializado em análise de Notas Fiscais de Serviço. Posso 
   const [statusMsg, setStatusMsg] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [debugOpen, setDebugOpen] = useState(false);
+  const [revisaoOcr, setRevisaoOcr] = useState<RevisaoOcr | null>(null);
+  const [revisaoCampoIndex, setRevisaoCampoIndex] = useState<number | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -90,10 +117,10 @@ Sou um assistente especializado em análise de Notas Fiscais de Serviço. Posso 
         const res = await fetch(`${API_BASE}/analisar/status/${taskId}`);
         const data = await res.json();
 
-        if (data.status === 'erro' || data.erro) {
+        if (data.status === 'erro' || data.status === 'error' || data.erro || data.error) {
           setMessages((prev) =>
             prev.map((m) =>
-              m.id === assistantMsgId ? { ...m, content: `❌ **Erro na análise:** ${data.erro || 'Erro desconhecido'}` } : m
+              m.id === assistantMsgId ? { ...m, content: `❌ **Erro na análise:** ${data.error || data.erro || 'Erro desconhecido'}` } : m
             )
           );
           setIsLoading(false);
@@ -112,6 +139,15 @@ Sou um assistente especializado em análise de Notas Fiscais de Serviço. Posso 
               m.id === assistantMsgId ? { ...m, content: relatorio } : m
             )
           );
+          setIsLoading(false);
+          setStatusMsg('');
+          return;
+        }
+
+        if (data.status === 'concluido' && !data.relatorio_completo) {
+          setMessages((prev) => prev.map((m) =>
+            m.id === assistantMsgId ? { ...m, content: '❌ **A análise terminou sem retornar um relatório.** Tente novamente; se persistir, verifique a geração do relatório no servidor.' } : m
+          ));
           setIsLoading(false);
           setStatusMsg('');
           return;
@@ -155,96 +191,211 @@ Sou um assistente especializado em análise de Notas Fiscais de Serviço. Posso 
   };
 
   const enviarParaAnalise = async (formData: FormData, arquivo?: File | null) => {
+    if (arquivo) {
+      await solicitarRevisaoOcr(arquivo, '', formData);
+      return;
+    }
     setIsLoading(true);
     setStatusMsg('Iniciando análise...');
 
     const formPayload = new FormData();
     formPayload.append('cnpj', formData.cnpj.replace(/\D/g, ''));
     formPayload.append('servico', formData.servico);
-    formPayload.append('valor', formData.valor.replace(',', '.'));
+    formPayload.append('valor', formData.valor);
     formPayload.append('cidade', formData.cidade);
     formPayload.append('uf', formData.uf);
-
-    if (arquivo) {
-      formPayload.append('arquivo', arquivo);
-    }
 
     try {
       const response = await fetch(`${API_BASE}/analisar`, {
         method: 'POST',
         body: formPayload,
       });
-
-      if (!response.ok) throw new Error(`Erro HTTP ${response.status}`);
-
       const data = await response.json();
 
-      if (data.status === 'erro') {
-        addMessage('assistant', `❌ **Erro na análise:** ${data.erro}`);
+      if (!response.ok || data.status === 'erro' || data.status === 'error') {
+        addMessage('assistant', `❌ **Erro na análise:** ${data.error || data.erro || `HTTP ${response.status}`}`);
         setIsLoading(false);
         setStatusMsg('');
         return;
       }
 
-      // Cria mensagem placeholder do assistente
       const assistantMsg = addMessage('assistant', '⏳ **Analisando...**');
-
-      // Inicia polling se tiver task_id
       if (data.dados_extraidos?.task_id) {
         pollTask(data.dados_extraidos.task_id, assistantMsg.id);
       } else {
-        addMessage('assistant', data.resumo || '✅ Análise concluída.');
+        addMessage('assistant', data.resumo || '❌ **A análise não foi iniciada:** o servidor não retornou o identificador da tarefa. Tente novamente.');
         setIsLoading(false);
         setStatusMsg('');
       }
-    } catch (error: any) {
-      addMessage('assistant', `❌ **Erro de conexão:** ${error.message}`);
+    } catch (error) {
+      addMessage('assistant', `❌ **Erro de conexão:** ${error instanceof Error ? error.message : 'erro desconhecido'}`);
+      setIsLoading(false);
+      setStatusMsg('');
+    }
+  };
+
+  const solicitarRevisaoOcr = async (arquivo: File, texto: string, dadosIniciais?: FormData) => {
+    setIsLoading(true);
+    setStatusMsg('Lendo a NFSe para revisão...');
+    const payload = new FormData();
+    payload.append('archivo', arquivo);
+    try {
+      const response = await fetch(`${API_BASE}/analisar`, { method: 'POST', body: payload });
+      const data = await response.json();
+      if (!response.ok || data.status !== 'revisao_necessaria') {
+        throw new Error(data.error || data.mensagem || `HTTP ${response.status}`);
+      }
+      abrirRevisaoOcr(arquivo, texto, dadosIniciais, data);
+    } catch (error) {
+      addMessage('assistant', `❌ **Não foi possível preparar a conferência:** ${error instanceof Error ? error.message : 'erro desconhecido'}`);
+    } finally {
+      setIsLoading(false);
+      setStatusMsg('');
+    }
+  };
+
+  const abrirRevisaoOcr = (arquivo: File, texto: string, dadosIniciais: FormData | undefined, data: any) => {
+    const extraidos = data.dados_extraidos || {};
+    setRevisaoOcr({
+      arquivo,
+      urlOriginal: URL.createObjectURL(arquivo),
+      texto,
+      confirmouConferencia: false,
+      cidadeUfManual: Boolean(dadosIniciais?.cidade || dadosIniciais?.uf),
+      cnpj: dadosIniciais?.cnpj || String(extraidos.cnpj || ''),
+      servico: dadosIniciais?.servico || String(extraidos.servico || ''),
+      valor: dadosIniciais?.valor || (extraidos.valor ? String(extraidos.valor).replace('.', ',') : ''),
+      cidade: dadosIniciais?.cidade || String(extraidos.cidade || ''),
+      uf: dadosIniciais?.uf || String(extraidos.uf || ''),
+      candidatos: data.candidatos_ocr || {},
+      divergencias: data.campos_divergentes || [],
+      confiança: Number(data['confiança_ocr'] || 0),
+      erros: data.erros_ocr || [],
+    });
+    setRevisaoCampoIndex(0);
+    addMessage('assistant', perguntaCampoRevisao(0, {
+      cnpj: dadosIniciais?.cnpj || String(extraidos.cnpj || ''),
+      servico: dadosIniciais?.servico || String(extraidos.servico || ''),
+      valor: dadosIniciais?.valor || (extraidos.valor ? String(extraidos.valor).replace('.', ',') : ''),
+      cidade: dadosIniciais?.cidade || String(extraidos.cidade || ''),
+      uf: dadosIniciais?.uf || String(extraidos.uf || ''),
+    }, data.candidatos_ocr || {}));
+  };
+
+  const perguntaCampoRevisao = (indice: number, dados: Pick<RevisaoOcr, 'cnpj' | 'servico' | 'valor' | 'cidade' | 'uf'>, candidatos: Record<string, string[]>) => {
+    const campo = CAMPOS_REVISAO[indice];
+    const atual = dados[campo.chave].trim();
+    const alternativas = candidatos[campo.chave] || [];
+    const sugestao = atual ? ` A leitura automática sugere: “${atual}”.` : ' A leitura automática não conseguiu determinar este campo.';
+    const divergencia = alternativas.length > 1 ? ` Os modelos deram leituras diferentes: ${alternativas.map((item) => `“${item}”`).join(', ')}.` : '';
+    return `Para não presumir nem inventar dados, confira no arquivo original e informe **${campo.rotulo}**.${sugestao}${divergencia} Digite o valor correto; se a sugestão estiver exatamente correta, responda **correto**.`;
+  };
+
+  const responderDuvidaOcr = (resposta: string) => {
+    if (!revisaoOcr || revisaoCampoIndex === null) return;
+    const campo = CAMPOS_REVISAO[revisaoCampoIndex];
+    const texto = resposta.trim();
+    const confirmaSugestao = /^(correto|correta|confirmo|confirmado|confirmada|sim|certo|certa|ok|est[aá] correto|est[aá] correta)[.! ]*$/i.test(texto);
+    if (/^(n[aã]o sei|n[aã]o consigo ler|ileg[ií]vel|desconhecido|desconhecida|\?)\W*$/i.test(texto)) {
+      addMessage('user', texto);
+      addMessage('assistant', `Sem problema. Não vou preencher **${campo.rotulo}** por suposição e a análise ficará bloqueada. Consulte o original ou uma segunda via legível e informe o campo; se não for possível, cancele esta revisão.`);
+      return;
+    }
+    const valorAtual = revisaoOcr[campo.chave].trim();
+    addMessage('user', texto);
+    if (confirmaSugestao && (!valorAtual || !validarRespostaCampo(campo.chave, valorAtual))) {
+      addMessage('assistant', `Não há uma sugestão válida para **${campo.rotulo}**. Consulte o documento e digite o valor correto; não posso completar ou aceitar este dado por suposição.`);
+      return;
+    }
+
+    const valorConfirmado = confirmaSugestao ? valorAtual : texto;
+    if (!confirmaSugestao && !validarRespostaCampo(campo.chave, valorConfirmado)) {
+      addMessage('assistant', `Esse valor não passou na validação básica de **${campo.rotulo}**. Confira o documento e envie novamente; não vou avançar nem completar o dado automaticamente.`);
+      return;
+    }
+    const dadosAtualizados = { ...revisaoOcr, [campo.chave]: valorConfirmado, confirmouConferencia: false };
+    setRevisaoOcr(dadosAtualizados);
+    const proximoIndice = revisaoCampoIndex + 1;
+    if (proximoIndice < CAMPOS_REVISAO.length) {
+      setRevisaoCampoIndex(proximoIndice);
+      addMessage('assistant', perguntaCampoRevisao(proximoIndice, dadosAtualizados, revisaoOcr.candidatos));
+      return;
+    }
+
+    setRevisaoCampoIndex(null);
+    addMessage('assistant', `Respostas registradas para conferência:\n\n- CNPJ do prestador: ${dadosAtualizados.cnpj}\n- Serviço: ${dadosAtualizados.servico}\n- Valor: ${dadosAtualizados.valor}\n- Município: ${dadosAtualizados.cidade}\n- UF: ${dadosAtualizados.uf}\n\nCompare com o documento original. A análise ainda está bloqueada até você marcar a confirmação final no painel.`);
+  };
+
+  const validarRespostaCampo = (campo: 'cnpj' | 'servico' | 'valor' | 'cidade' | 'uf', valor: string): boolean => {
+    if (!valor.trim()) return false;
+    if (campo === 'cnpj') {
+      const digitos = valor.replace(/\D/g, '');
+      if (!/^\d{14}$/.test(digitos) || /^(\d)\1{13}$/.test(digitos)) return false;
+      const calcularDigito = (base: string, pesos: number[]) => {
+        const resto = base.split('').reduce((soma, digito, indice) => soma + Number(digito) * pesos[indice], 0) % 11;
+        return resto < 2 ? 0 : 11 - resto;
+      };
+      const dv1 = calcularDigito(digitos.slice(0, 12), [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]);
+      const dv2 = calcularDigito(digitos.slice(0, 12) + dv1, [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]);
+      return Number(digitos[12]) === dv1 && Number(digitos[13]) === dv2;
+    }
+    if (campo === 'servico' || campo === 'cidade') return valor.trim().length >= 3;
+    if (campo === 'uf') return ['AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'].includes(valor.trim().toUpperCase());
+    const limpo = valor.trim().replace(/[^\d,.-]/g, '');
+    const normalizado = limpo.includes(',') && limpo.includes('.')
+      ? limpo.lastIndexOf(',') > limpo.lastIndexOf('.') ? limpo.replace(/\./g, '').replace(',', '.') : limpo.replace(/,/g, '')
+      : limpo.replace(',', '.');
+    return Number.isFinite(Number(normalizado)) && Number(normalizado) > 0;
+  };
+
+  const confirmarRevisaoOcr = async () => {
+    if (!revisaoOcr || !revisaoOcr.confirmouConferencia) return;
+    setIsLoading(true);
+    setStatusMsg('Enviando dados conferidos...');
+    const payload = new FormData();
+    payload.append('archivo', revisaoOcr.arquivo);
+    payload.append('cnpj', revisaoOcr.cnpj);
+    payload.append('servico', revisaoOcr.servico);
+    payload.append('valor', revisaoOcr.valor);
+    payload.append('cidade', revisaoOcr.cidade);
+    payload.append('uf', revisaoOcr.uf);
+    if (revisaoOcr.texto.trim()) payload.append('mensaje', revisaoOcr.texto.trim());
+    payload.append('confirmar_dados', 'true');
+    try {
+      const response = await fetch(`${API_BASE}/analisar`, { method: 'POST', body: payload });
+      const data = await response.json();
+      if (!response.ok || data.status !== 'procesando' || !data.dados_extraidos?.task_id) {
+        throw new Error(data.error || `HTTP ${response.status}`);
+      }
+      const mensagem = addMessage('assistant', '⏳ **Gerando análise com os dados conferidos...**');
+      URL.revokeObjectURL(revisaoOcr.urlOriginal);
+      setRevisaoOcr(null);
+      pollTask(data.dados_extraidos.task_id, mensagem.id);
+    } catch (error) {
+      addMessage('assistant', `❌ **Não foi possível iniciar a análise:** ${error instanceof Error ? error.message : 'erro desconhecido'}`);
       setIsLoading(false);
       setStatusMsg('');
     }
   };
 
   const enviarMensagem = async (texto: string, arquivo?: File | null) => {
+    if (revisaoOcr) {
+      if (arquivo) {
+        addMessage('assistant', 'Conclua ou cancele a revisão atual antes de anexar outro arquivo.');
+        return;
+      }
+      if (revisaoCampoIndex !== null) {
+        if (texto.trim()) responderDuvidaOcr(texto);
+      } else {
+        if (texto.trim()) addMessage('user', texto);
+        addMessage('assistant', 'Os campos já foram perguntados. Revise o resumo acima e confirme no painel, ou cancele para reiniciar a leitura. Não vou iniciar análise a partir de uma mensagem durante esta revisão.');
+      }
+      return;
+    }
     // Se tem arquivo mas não tem texto, envia só o arquivo
     if (arquivo && !texto.trim()) {
       addMessage('user', `📎 **Arquivo anexado:** \`${arquivo.name}\``);
-      setIsLoading(true);
-      setStatusMsg('Extraindo dados do arquivo...');
-
-      const formPayload = new FormData();
-      formPayload.append('arquivo', arquivo);
-
-      try {
-        const response = await fetch(`${API_BASE}/analisar`, {
-          method: 'POST',
-          body: formPayload,
-        });
-
-        if (!response.ok) throw new Error(`Erro HTTP ${response.status}`);
-
-        const data = await response.json();
-
-        if (data.status === 'erro') {
-          addMessage('assistant', `❌ **Erro na análise:** ${data.erro}`);
-          setIsLoading(false);
-          setStatusMsg('');
-          return;
-        }
-
-        const assistantMsg = addMessage('assistant', '⏳ **Analisando...**');
-
-        if (data.dados_extraidos?.task_id) {
-          pollTask(data.dados_extraidos.task_id, assistantMsg.id);
-        } else {
-          addMessage('assistant', data.resumo || '✅ Análise concluída.');
-          setIsLoading(false);
-          setStatusMsg('');
-        }
-      } catch (error: any) {
-        addMessage('assistant', `❌ **Erro de conexão:** ${error.message}`);
-        setIsLoading(false);
-        setStatusMsg('');
-      }
+      await solicitarRevisaoOcr(arquivo, '');
       return;
     }
 
@@ -256,6 +407,10 @@ Sou um assistente especializado em análise de Notas Fiscais de Serviço. Posso 
     }
 
     addMessage('user', mensagemUsuario);
+    if (arquivo) {
+      await solicitarRevisaoOcr(arquivo, texto);
+      return;
+    }
     setIsLoading(true);
     setStatusMsg('Analisando...');
 
@@ -272,12 +427,10 @@ Sou um assistente especializado em análise de Notas Fiscais de Serviço. Posso 
         body: formPayload,
       });
 
-      if (!response.ok) throw new Error(`Erro HTTP ${response.status}`);
-
       const data = await response.json();
 
-      if (data.status === 'erro') {
-        addMessage('assistant', `❌ **Erro na análise:** ${data.erro}`);
+      if (!response.ok || data.status === 'erro' || data.status === 'error') {
+        addMessage('assistant', `❌ **Erro na análise:** ${data.error || data.erro || `HTTP ${response.status}`}`);
         setIsLoading(false);
         setStatusMsg('');
         return;
@@ -288,7 +441,7 @@ Sou um assistente especializado em análise de Notas Fiscais de Serviço. Posso 
       if (data.dados_extraidos?.task_id) {
         pollTask(data.dados_extraidos.task_id, assistantMsg.id);
       } else {
-        addMessage('assistant', data.resumo || '✅ Análise concluída.');
+        addMessage('assistant', data.resumo || '❌ **A análise não foi iniciada:** o servidor não retornou o identificador da tarefa. Tente novamente.');
         setIsLoading(false);
         setStatusMsg('');
       }
@@ -398,6 +551,63 @@ Envie os dados da NFSe que desejo ajudar.`,
         isOpen={debugOpen}
         onClose={() => setDebugOpen(false)}
       />
+
+      {revisaoOcr && revisaoCampoIndex === null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <section className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl border border-slate-600 bg-slate-900 p-6 shadow-2xl" aria-labelledby="ocr-review-title">
+            <h2 id="ocr-review-title" className="text-xl font-semibold text-white">Conferir dados da NFSe</h2>
+            <p className="mt-2 text-sm text-amber-300">A leitura automática pode errar. Compare cada campo com o PDF/imagem original; a análise só começa após sua confirmação.</p>
+            <a href={revisaoOcr.urlOriginal} target="_blank" rel="noreferrer" className="mt-2 inline-flex text-sm text-blue-300 underline">Abrir arquivo original: {revisaoOcr.arquivo.name}</a>
+            <p className="mt-1 text-xs text-slate-400">Concordância dos modelos: {Math.round(revisaoOcr.confiança * 100)}% — indicador auxiliar, não é garantia de acerto.</p>
+            {revisaoOcr.erros.length > 0 && <p className="mt-2 text-xs text-amber-200">Observações: {revisaoOcr.erros.join('; ')}</p>}
+            <div className="mt-5 grid gap-4 sm:grid-cols-2">
+              {([
+                ['cnpj', 'CNPJ do prestador'],
+                ['servico', 'Descrição do serviço'],
+                ['valor', 'Valor total (R$)'],
+                ['cidade', revisaoOcr.cidadeUfManual ? 'Município da prestação (manual)' : 'Município da prestação'],
+                ['uf', revisaoOcr.cidadeUfManual ? 'UF (manual)' : 'UF'],
+              ] as const).map(([campo, rotulo]) => (
+                <label key={campo} className="text-sm text-slate-300">
+                  {rotulo}{revisaoOcr.divergencias.includes(campo) && <span className="ml-2 text-amber-300">— divergência</span>}
+                  <input
+                    value={revisaoOcr[campo]}
+                    onChange={(event) => setRevisaoOcr((prev) => prev ? { ...prev, [campo]: event.target.value, confirmouConferencia: false } : prev)}
+                    className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-white focus:border-blue-500 focus:outline-none"
+                  />
+                  {(revisaoOcr.candidatos[campo] || []).length > 0 && <span className="mt-1 flex flex-wrap gap-1">{revisaoOcr.candidatos[campo].map((candidato, indice) => <button key={`${campo}-${indice}`} type="button" onClick={() => setRevisaoOcr((prev) => prev ? { ...prev, [campo]: candidato, confirmouConferencia: false } : prev)} className="rounded bg-slate-700 px-2 py-1 text-left text-xs text-amber-200 hover:bg-slate-600">Sugestão: {candidato}</button>)}</span>}
+                </label>
+              ))}
+              {revisaoOcr.cidadeUfManual && <p className="sm:col-span-2 text-xs text-slate-400">Município e UF vieram preenchidos manualmente no formulário; confira-os no documento, pois determinam regras tributárias locais.</p>}
+            </div>
+            <div className="mt-6 flex flex-wrap justify-end gap-3">
+              <button onClick={() => { URL.revokeObjectURL(revisaoOcr.urlOriginal); setRevisaoOcr(null); }} disabled={isLoading} className="rounded-lg border border-slate-600 px-4 py-2 text-slate-200">Cancelar</button>
+              <label className="flex w-full items-start gap-2 text-sm text-slate-200">
+                <input type="checkbox" checked={revisaoOcr.confirmouConferencia} disabled={!CAMPOS_REVISAO.every(({ chave }) => validarRespostaCampo(chave, revisaoOcr[chave]))} onChange={(event) => setRevisaoOcr((prev) => prev ? { ...prev, confirmouConferencia: event.target.checked } : prev)} className="mt-1 accent-emerald-500" />
+                Conferi estes dados diretamente no arquivo original; confirmo que o CNPJ é do prestador e que o valor, serviço e município correspondem à NFSe.
+              </label>
+              <button onClick={confirmarRevisaoOcr} disabled={isLoading || !revisaoOcr.confirmouConferencia} className="rounded-lg bg-emerald-600 px-4 py-2 font-medium text-white disabled:opacity-50">Confirmar e iniciar análise</button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {revisaoOcr && revisaoCampoIndex !== null && (
+        <div className="fixed bottom-24 right-4 z-40">
+          <button
+            type="button"
+            onClick={() => {
+              URL.revokeObjectURL(revisaoOcr.urlOriginal);
+              setRevisaoOcr(null);
+              setRevisaoCampoIndex(null);
+              addMessage('assistant', 'Revisão cancelada. Nenhuma análise foi iniciada.');
+            }}
+            className="rounded-lg border border-slate-500 bg-slate-800 px-3 py-2 text-sm text-slate-200 shadow-lg hover:bg-slate-700"
+          >
+            Cancelar revisão da NFSe
+          </button>
+        </div>
+      )}
     </div>
   );
 }

@@ -22,9 +22,11 @@ export interface DadosExtraidos {
 
 export interface ResultadoOcr {
   dados: DadosExtraidos;
+  candidatos: Record<'cnpj' | 'servico' | 'valor' | 'cidade' | 'uf', string[]>;
   confianza: number; // 0 a 1
   campos_divergentes: string[];
   metodo: string;
+  erros: string[];
 }
 
 const SYSTEM_PROMPT_OCR = `Você é um especialista em leitura de Notas Fiscais de Serviço eletrônicas (NFSe) brasileiras.
@@ -59,19 +61,6 @@ Retorne APENAS um JSON válido e nada mais, no formato exato:
 
 Se algum campo não estiver visível, use string vazia ou 0.0 para valor.
 NÃO invente dados.`;
-
-const SYSTEM_PROMPT_CONFERENCIA = `Você é um verificador final de dados de NFSe.
-
-São apresentadas DUAS extrações independentes da mesma NFSe.
-Compare os campos e decida qual é o valor CORRETO para cada campo.
-
-Regras:
-- Se ambos coincidem em um campo, use esse valor.
-- Se diferem, analise qual é mais plausível (formato de CNPJ válido, valor coerente, etc.)
-- Se não conseguir decidir, use o valor da primeira extração.
-
-Retorne APENAS um JSON válido com os campos finais:
-{"cnpj": "...", "servico": "...", "valor": 0.00, "cidade": "...", "uf": "...", "numero_nfse": "...", "data_emision": "..."}`;
 
 const SYSTEM_PROMPT_ANALISE = `Você é um analista fiscal sênior especializado em NFSe e direito tributário brasileiro.
 Analise os dados fornecidos e gere um relatório técnico-jurídico completo em Markdown.
@@ -150,7 +139,7 @@ export function llamarLlm(
         const body = await res.text();
         return { ok: false, error: `OpenRouter HTTP ${res.status}: ${body.slice(0, 200)}` };
       }
-      const data = await res.json();
+      const data = await res.json() as { choices?: Array<{ message?: { content?: string } }> };
       const content = data?.choices?.[0]?.message?.content;
       if (!content) return { ok: false, error: 'Resposta vazia do OpenRouter' };
       return { ok: true, content };
@@ -182,45 +171,49 @@ export function extraerJson(texto: string): DadosExtraidos | null {
 
 function normalizarDados(d: DadosExtraidos | null): DadosExtraidos {
   if (!d) return { cnpj: '', servico: '', valor: 0, cidade: '', uf: '' };
+  const valor = typeof d.valor === 'number' ? d.valor : parseValor(d.valor);
   return {
-    cnpj: (d.cnpj || '').replace(/\D/g, ''),
-    servico: d.servico || '',
-    valor: typeof d.valor === 'number' ? d.valor : parseFloat(String(d.valor || 0)),
-    cidade: d.cidade || '',
-    uf: (d.uf || '').toUpperCase(),
-    numero_nfse: d.numero_nfse || '',
-    data_emision: d.data_emision || '',
+    cnpj: typeof d.cnpj === 'string' ? d.cnpj.replace(/\D/g, '') : '',
+    servico: typeof d.servico === 'string' ? d.servico.trim() : '',
+    valor: Number.isFinite(valor) ? valor : 0,
+    cidade: typeof d.cidade === 'string' ? d.cidade.trim() : '',
+    uf: typeof d.uf === 'string' ? d.uf.toUpperCase().trim() : '',
+    numero_nfse: typeof d.numero_nfse === 'string' ? d.numero_nfse : '',
+    data_emision: typeof d.data_emision === 'string' ? d.data_emision : '',
   };
 }
 
-function compararCampos(a: DadosExtraidos, b: DadosExtraidos): { divergentes: string[]; coinciden: string[] } {
-  const campos = ['cnpj', 'servico', 'valor', 'cidade', 'uf'];
-  const divergentes: string[] = [];
-  const coinciden: string[] = [];
+function parseValor(valor: unknown): number {
+  const texto = String(valor ?? '').trim().replace(/[^\d,.-]/g, '');
+  if (!texto) return 0;
+  const normalizado = texto.includes(',') && texto.includes('.')
+    ? texto.lastIndexOf(',') > texto.lastIndexOf('.')
+      ? texto.replace(/\./g, '').replace(',', '.')
+      : texto.replace(/,/g, '')
+    : texto.includes(',')
+      ? texto.replace(',', '.')
+      : texto;
+  const numero = Number(normalizado);
+  return Number.isFinite(numero) ? numero : 0;
+}
 
-  for (const campo of campos) {
-    const va = String(a[campo] ?? '').trim().toLowerCase();
-    const vb = String(b[campo] ?? '').trim().toLowerCase();
-    if (va === vb && va !== '') {
-      coinciden.push(campo);
-    } else if (va !== vb) {
-      divergentes.push(campo);
-    }
-  }
-
-  return { divergentes, coinciden };
+function chaveComparacao(campo: keyof DadosExtraidos, valor: string): string {
+  if (campo === 'cnpj') return valor.replace(/\D/g, '');
+  if (campo === 'uf') return valor.trim().toUpperCase();
+  if (campo === 'valor') return String(parseValor(valor));
+  return valor.trim().toLocaleLowerCase('pt-BR').replace(/\s+/g, ' ');
 }
 
 /**
  * OCR com conferência cruzada e redundância real.
  *
- * Estratégia de máxima confiabilidade:
+ * Estratégia de redundância com confirmação por maioria:
  * 1. Extração primária: GPT-4o-mini (modelo A)
  * 2. Extração secundária: Claude 3.5 Sonnet (modelo B - diferente do A)
  * 3. Extração terciária: Gemini 2.0 Flash (modelo C - diferente de A e B)
  * 4. Voto majoritário: campo que aparece em 2+ extrações vence
  * 5. Validação: CNPJ (DV), UF (lista oficial), valor (positivo e razoável)
- * 6. Fallback: regex no texto extraído do PDF (se disponível)
+ * 6. Divergências sem maioria são devolvidas para confirmação humana.
  *
  * Modelos diferentes = erros diferentes = chance muito menor de erro sistemático.
  */
@@ -231,95 +224,77 @@ export async function extraerDatosNfse(
   apiKey: string,
   textoPdfExtraido?: string,
 ): Promise<ResultadoOcr> {
-  const mimeType = {
-    png: 'image/png',
-    jpg: 'image/jpeg',
-    jpeg: 'image/jpeg',
-    pdf: 'application/pdf',
-  }[extension.toLowerCase()] || 'image/png';
-
-  // --- Extração primária ---
-  const mensajesPrimaria = [
-    { role: 'system', content: SYSTEM_PROMPT_OCR },
-    {
-      role: 'user',
-      content: [
-        { type: 'text', text: 'Extraia os dados desta NFSe e retorne APENAS o JSON.' },
-        { type: 'image_url', image_url: { url: `data:${mimeType};base64,${archivoBase64}` } },
-      ],
-    },
-  ];
-
-  const res1 = await llamarLlm(mensajesPrimaria, config, apiKey, config.modeloVision, 0.1);
-  const datos1 = res1.ok ? normalizarDados(extraerJson(res1.content || '')) : { cnpj: '', servico: '', valor: 0, cidade: '', uf: '' };
-
-  // --- Extração secundária (independente) ---
-  const mensajesSecundaria = [
-    { role: 'system', content: SYSTEM_PROMPT_OCR_VERIFICACION },
-    {
-      role: 'user',
-      content: [
-        { type: 'text', text: 'Verifique NOVAMENTE os dados desta NFSe. Retorne APENAS o JSON.' },
-        { type: 'image_url', image_url: { url: `data:${mimeType};base64,${archivoBase64}` } },
-      ],
-    },
-  ];
-
-const res2 = await llamarLlm(mensajesSecundaria, config, apiKey, config.modeloVisionAlt, 0.1);
-  const datos2 = res2.ok ? normalizarDatos(extraerJson(res2.content || '')) : datos1;
-
-
-  // --- Extração terciária: Gemini 2.0 Flash (outro modelo diferente) ---
-  const mensajesTerciaria = [
-    { role: 'system', content: SYSTEM_PROMPT_OCR },
-    {
-      role: 'user',
-      content: [
-        { type: 'text', text: 'Faça uma terceira extração independente dos dados desta NFSe. Retorne APENAS o JSON.' },
-        { type: 'image_url', image_url: { url: `data:${mimeType};base64,${archivoBase64}` } },
-      ],
-    },
-  ];
-
-  const res3 = await llamarLlm(mensajesTerciaria, config, apiKey, config.modeloOcrAlt, 0.1);
-  const datos3 = res3.ok ? normalizarDados(extraerJson(res3.content || '')) : datos1;
-
-  // --- Voto majoritário ---
-  const datosVotados = votarDados([datos1, datos2, datos3]);
-
-  // --- Validação ---
-  const { validarDadosExtraidos } = await import('./validacoes');
-  const validacao = validarDadosExtraidos(datosVotados);
-
-  // --- Fallback com regex se texto do PDF disponível ---
-  let datosFinales = validacao.dados;
-  if (textoPdfExtraido) {
-    const { extrairCnpjsDoTexto, extrairValoresDoTexto, extrairUfsDoTexto } = await import('./validacoes');
-    const cnpjsRegex = extrairCnpjsDoTexto(textoPdfExtraido);
-    const valoresRegex = extrairValoresDoTexto(textoPdfExtraido);
-    const ufsRegex = extrairUfsDoTexto(textoPdfExtraido);
-
-    if (cnpjsRegex.length > 0 && (!datosFinales.cnpj || datosFinales.cnpj.replace(/\D/g, '').length < 14)) {
-      datosFinales.cnpj = cnpjsRegex[0];
-    }
-    if (valoresRegex.length > 0 && (!datosFinales.valor || datosFinales.valor === 0)) {
-      datosFinales.valor = valoresRegex[0];
-    }
-    if (ufsRegex.length > 0 && (!datosFinales.uf || datosFinales.uf.length !== 2)) {
-      datosFinales.uf = ufsRegex[0];
-    }
+  const formato = extension.toLowerCase();
+  if (!['png', 'jpg', 'jpeg', 'pdf'].includes(formato)) {
+    throw new Error('Formato não suportado. Envie uma NFSe em PNG, JPG ou PDF.');
   }
 
-  // --- Cálculo de confiança ---
-  const { divergentes, coinciden } = compararCampos(datos1, datos2);
-  const camposConDatos = coinciden.length + divergentes.length;
-  const confianza = camposConDatos > 0 ? coinciden.length / camposConDatos : 0;
+  const evidenciaPdf = textoPdfExtraido
+    ? `\n\nTexto embutido no PDF (use como evidência; não presuma que todo CNPJ ou valor pertence ao prestador/total):\n${textoPdfExtraido.slice(0, 40000)}`
+    : '';
+  const mimeType = formato === 'pdf' ? 'application/pdf' : formato === 'png' ? 'image/png' : 'image/jpeg';
+  const anexo = formato === 'pdf'
+    ? { type: 'file', file: { filename: 'nfse.pdf', file_data: `data:application/pdf;base64,${archivoBase64}` } }
+    : { type: 'image_url', image_url: { url: `data:${mimeType};base64,${archivoBase64}` } };
+  const criarMensagens = (prompt: string, instrucao: string) => [
+    { role: 'system', content: prompt },
+    { role: 'user', content: [{ type: 'text', text: `${instrucao}${evidenciaPdf}` }, anexo] },
+  ];
+
+  // Falhas de chamada ou JSON inválido não participam do voto.
+  const nomesModelos = [config.modeloVision, config.modeloVisionAlt, config.modeloOcrAlt];
+  if (new Set(nomesModelos).size !== nomesModelos.length) {
+    return {
+      dados: { cnpj: '', servico: '', valor: 0, cidade: '', uf: '' },
+      candidatos: { cnpj: [], servico: [], valor: [], cidade: [], uf: [] },
+      confianza: 0,
+      campos_divergentes: ['cnpj', 'servico', 'valor', 'cidade', 'uf'],
+      metodo: 'bloqueado_modelos_repetidos',
+      erros: ['A extração foi bloqueada: configure três identificadores de modelo distintos para reduzir votos correlacionados.'],
+    };
+  }
+  const [res1, res2, res3] = await Promise.all([
+    llamarLlm(criarMensagens(SYSTEM_PROMPT_OCR, 'Extraia os dados desta NFSe e retorne APENAS o JSON.'), config, apiKey, config.modeloVision, 0.1),
+    llamarLlm(criarMensagens(SYSTEM_PROMPT_OCR_VERIFICACION, 'Verifique novamente os dados desta NFSe e retorne APENAS o JSON.'), config, apiKey, config.modeloVisionAlt, 0.1),
+    llamarLlm(criarMensagens(SYSTEM_PROMPT_OCR, 'Faça uma extração independente dos dados desta NFSe e retorne APENAS o JSON.'), config, apiKey, config.modeloOcrAlt, 0.1),
+  ]);
+  const respostas = [res1, res2, res3];
+  const extracoes = respostas.map((res) => res.ok ? extraerJson(res.content || '') : null);
+  const votosValidos = extracoes.filter((d): d is DadosExtraidos => d !== null).map(normalizarDados);
+  const { dados: datosVotados, divergentes, confianza } = votarDados(votosValidos);
+  const campos = ['cnpj', 'servico', 'valor', 'cidade', 'uf'] as const;
+  const candidatos = Object.fromEntries(campos.map((campo) => [
+    campo,
+    [...new Set(votosValidos.map((dados) => String(dados[campo] ?? '').trim()).filter(Boolean))],
+  ])) as ResultadoOcr['candidatos'];
+
+  const { validarDadosExtraidos, validarCnpj } = await import('./validacoes');
+  const validacao = validarDadosExtraidos(datosVotados);
+  const dadosFinais = { ...validacao.dados };
+  // Não use um CNPJ inválido para consultar uma empresa; pode ser o CNPJ do tomador.
+  if (dadosFinais.cnpj && !validarCnpj(dadosFinais.cnpj)) {
+    validacao.erros.push('CNPJ extraído não passou na validação dos dígitos verificadores');
+    dadosFinais.cnpj = '';
+  }
+  const erros = [...validacao.erros];
+  if (votosValidos.length < 2) {
+    erros.push(`Redundância insuficiente: apenas ${votosValidos.length} de 3 modelos produziram JSON válido; confirme os dados na NFSe.`);
+  }
+  respostas.forEach((res, indice) => {
+    if (!res.ok) erros.push(`Falha no modelo ${nomesModelos[indice]}: ${res.error || 'sem resposta'}`);
+    else if (!extracoes[indice]) erros.push(`O modelo ${nomesModelos[indice]} retornou conteúdo que não pôde ser interpretado como JSON`);
+  });
+  if (votosValidos.length === 0) {
+    erros.unshift(`Nenhum modelo retornou uma extração válida. ${respostas.map((r) => r.error).filter(Boolean).join(' | ')}`.trim());
+  }
 
   return {
-    dados: datosFinales,
+    dados: dadosFinais,
+    candidatos,
     confianza,
     campos_divergentes: divergentes,
     metodo: 'triple_extraccion_multimodelo',
+    erros,
   };
 }
 
@@ -328,40 +303,37 @@ const res2 = await llamarLlm(mensajesSecundaria, config, apiKey, config.modeloVi
  * Para cada campo, o valor que aparece em 2+ extrações vence.
  * Se todos divergem, usa o primeiro não vazio.
  */
-function votarDados(extracoes: DadosExtraidos[]): DadosExtraidos {
+function votarDados(extracoes: DadosExtraidos[]): { dados: DadosExtraidos; divergentes: string[]; confianza: number } {
   const campos: (keyof DadosExtraidos)[] = ['cnpj', 'servico', 'valor', 'cidade', 'uf'];
   const resultado: DadosExtraidos = { cnpj: '', servico: '', valor: 0, cidade: '', uf: '' };
+  const divergentes: string[] = [];
+  let camposDecididos = 0;
+  let concordancia = 0;
 
   for (const campo of campos) {
-    const valores = extracoes.map((e) => String(e[campo] ?? '').trim());
-    const contagem: Record<string, number> = {};
-    for (const v of valores) {
-      if (v) contagem[v] = (contagem[v] || 0) + 1;
+    const valores = extracoes
+      .map((e) => String(e[campo] ?? '').trim())
+      .filter((valor) => Boolean(valor) && (campo !== 'valor' || parseValor(valor) > 0));
+    const grupos = new Map<string, string[]>();
+    for (const valor of valores) {
+      const chave = chaveComparacao(campo, valor);
+      if (chave) grupos.set(chave, [...(grupos.get(chave) || []), valor]);
     }
-
-    // Encontra o valor com mais ocorrências
-    let maxCount = 0;
-    let valorVencedor = '';
-    for (const [valor, count] of Object.entries(contagem)) {
-      if (count > maxCount) {
-        maxCount = count;
-        valorVencedor = valor;
-      }
-    }
-
-    // Se não há maioria (todos diferentes), usa o primeiro não vazio
-    if (maxCount < 2) {
-      valorVencedor = valores.find((v) => v) || '';
-    }
-
-    if (campo === 'valor') {
-      resultado[campo] = parseFloat(valorVencedor) || 0;
-    } else {
-      (resultado as any)[campo] = valorVencedor;
+    const ordenados = [...grupos.entries()].sort((a, b) => b[1].length - a[1].length);
+    const [, votosVencedores] = ordenados[0] || ['', []];
+    const temMaioria = votosVencedores.length >= 2 && votosVencedores.length > (extracoes.length / 2);
+    if (valores.length > 0) camposDecididos++;
+    if (temMaioria) {
+      concordancia += votosVencedores.length / extracoes.length;
+      const escolhido = votosVencedores[0];
+      if (campo === 'valor') resultado.valor = parseValor(escolhido);
+      else (resultado as any)[campo] = escolhido;
+    } else if (valores.length > 0 && (grupos.size > 1 || extracoes.length > 1)) {
+      divergentes.push(campo);
     }
   }
 
-  return resultado;
+  return { dados: resultado, divergentes, confianza: camposDecididos ? concordancia / camposDecididos : 0 };
 }
 export async function extraerDatosTexto(
   texto: string,
@@ -374,7 +346,7 @@ export async function extraerDatosTexto(
   ];
   const res = await llamarLlm(mensajes, config, apiKey, config.modeloOcr, 0.1);
   if (!res.ok) return { cnpj: '', servico: '', valor: 0, cidade: '', uf: '' };
-  return normalizarDatos(extraerJson(res.content || ''));
+  return normalizarDados(extraerJson(res.content || ''));
 }
 
 export async function generarAnalisis(
@@ -429,7 +401,7 @@ export function normalizarEncoding(texto: string): string {
     }
 
     // Tenta decodificar como UTF-8
-    const decoder = new TextDecoder('utf-8', { fatal: false });
+    const decoder = new TextDecoder('utf-8');
     const decoded = decoder.decode(bytes);
 
     // Se não houver caracteres de substituição (\uFFFD), o decoding foi bem-sucedido

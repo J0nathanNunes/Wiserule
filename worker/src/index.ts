@@ -7,7 +7,7 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { getConfig, Env } from './config';
 import { consultarCnpj, consultarCnpjFallback, emptyEmpresa } from './cnpj';
-import { extraerDatosNfse, extraerDatosTexto, generarAnalisis, normalizarEncoding } from './llm';
+import { extraerDatosNfse, extraerDatosTexto, generarAnalisis } from './llm';
 import { codificarBase64, decodificarBase64 } from './encoding';
 import { buscarOnline, formatearBuscaParaLlm } from './busca';
 import { correlacionarPorCnae, formatearCorrelacionParaLlm } from './correlacao';
@@ -15,6 +15,7 @@ import { formatearClasificacionParaLlm } from './classificacao';
 import { salvarAnalise, listarAnalises, buscarAnalisePorId } from './db';
 import { consultarNotas } from './geranet';
 import { TareaAnalisis, generarTaskId } from './tarefas';
+import { validarCnpj, validarUf } from './validacoes';
 
 export { TareaAnalisis };
 
@@ -49,6 +50,34 @@ function normalizarEncoding(texto: string): string {
   }
 
   return resultado;
+}
+
+function parseValorMonetario(valor: string): number {
+  const texto = valor.trim().replace(/[^\d,.-]/g, '');
+  if (!texto) return 0;
+  const normalizado = texto.includes(',') && texto.includes('.')
+    ? texto.lastIndexOf(',') > texto.lastIndexOf('.')
+      ? texto.replace(/\./g, '').replace(',', '.')
+      : texto.replace(/,/g, '')
+    : texto.includes(',')
+      ? texto.replace(',', '.')
+      : texto;
+  const numero = Number(normalizado);
+  return Number.isFinite(numero) ? numero : 0;
+}
+
+function arquivoCorrespondeExtensao(bytes: Uint8Array, extensao: string): boolean {
+  if (extensao === 'pdf') {
+    const cabecalho = new TextDecoder().decode(bytes.subarray(0, Math.min(bytes.length, 1024)));
+    return cabecalho.includes('%PDF-');
+  }
+  if (extensao === 'png') {
+    return bytes.length >= 8 && [137, 80, 78, 71, 13, 10, 26, 10].every((byte, indice) => bytes[indice] === byte);
+  }
+  if (extensao === 'jpg' || extensao === 'jpeg') {
+    return bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+  }
+  return false;
 }
 
 const app = new Hono<{ Bindings: Env }>();
@@ -110,45 +139,64 @@ app.post('/api/analisar', async (c) => {
     const servicoForm = form.get('servico')?.toString() || '';
     const valorForm = form.get('valor')?.toString() || '';
     const cidadeForm = form.get('cidade')?.toString() || '';
-    const ufForm = form.get('uf')?.toString() || 'MS';
+    const ufForm = form.get('uf')?.toString() || '';
     const mensajeForm = form.get('mensaje')?.toString() || '';
     const cnpjTomador = form.get('cnpj_tomador')?.toString() || '';
     const archivo = form.get('archivo');
+    const dadosConfirmados = form.get('confirmar_dados')?.toString() === 'true';
 
     // --- FASE 1: Extraer datos ---
     let datosExtraidos: Record<string, unknown> = {};
-    let resultadoOcr: ReturnType<typeof extraerDatosNfse> | null = null;
+    let resultadoOcr: Awaited<ReturnType<typeof extraerDatosNfse>> | null = null;
 
     if (archivo && archivo instanceof File) {
-      const bytes = new Uint8Array(await archivo.arrayBuffer());
-      if (bytes.length > config.maxFileSizeMb * 1024 * 1024) {
-        return c.json({ status: 'error', error: `Arquivo muito grande. Máximo: ${config.maxFileSizeMb}MB` }, 413);
-      }
-
       const extension = archivo.name.includes('.')
         ? archivo.name.split('.').pop()!.toLowerCase()
         : 'png';
-
-      // Convierte a base64
-      let binary = '';
-      for (const byte of bytes) {
-        binary += String.fromCharCode(byte);
+      if (!['png', 'jpg', 'jpeg', 'pdf'].includes(extension)) {
+        return c.json({ status: 'error', error: 'Formato não suportado. Envie uma NFSe em PNG, JPG ou PDF.' }, 415);
       }
-      const base64 = btoa(binary);
+      if (archivo.size === 0 || archivo.size > config.maxFileSizeMb * 1024 * 1024) {
+        return c.json({ status: 'error', error: `Arquivo vazio ou muito grande. Máximo: ${config.maxFileSizeMb}MB` }, 413);
+      }
+      const bytes = new Uint8Array(await archivo.arrayBuffer());
+      if (!arquivoCorrespondeExtensao(bytes, extension)) {
+        return c.json({ status: 'error', error: 'O conteúdo do arquivo não corresponde à extensão. Envie um PDF, PNG ou JPG válido.' }, 415);
+      }
 
-      // Se for PDF, extrai texto para usar como fallback no OCR
-      let textoPdfExtraido: string | undefined;
-      if (extension === 'pdf') {
-        try {
-          const { extrairTextoPdf } = await import('./pdf');
-          textoPdfExtraido = await extrairTextoPdf(bytes);
-        } catch (e) {
-          console.error('[PDF] Erro ao extrair texto:', e);
+      if (dadosConfirmados) {
+        datosExtraidos = {
+          cnpj: cnpjForm,
+          servico: servicoForm,
+          valor: parseValorMonetario(valorForm),
+          cidade: cidadeForm,
+          uf: ufForm,
+          confianza_ocr: 0,
+          campos_divergentes_ocr: [],
+          erros_ocr: [],
+        };
+      } else {
+        // Convierte a base64
+        let binary = '';
+        for (const byte of bytes) {
+          binary += String.fromCharCode(byte);
         }
-      }
+        const base64 = btoa(binary);
 
-      resultadoOcr = await extraerDatosNfse(base64, extension, config, env.OPENROUTER_API_KEY || '', textoPdfExtraido);
-      datosExtraidos = resultadoOcr.dados as unknown as Record<string, unknown>;
+        // Se for PDF, extrai texto para usar como evidência adicional.
+        let textoPdfExtraido: string | undefined;
+        if (extension === 'pdf') {
+          try {
+            const { extrairTextoPdf } = await import('./pdf');
+            textoPdfExtraido = await extrairTextoPdf(bytes);
+          } catch (e) {
+            console.error('[PDF] Erro ao extrair texto:', e);
+          }
+        }
+
+        resultadoOcr = await extraerDatosNfse(base64, extension, config, env.OPENROUTER_API_KEY || '', textoPdfExtraido);
+        datosExtraidos = resultadoOcr.dados as unknown as Record<string, unknown>;
+      }
     } else if (mensajeForm && !cnpjForm && !servicoForm && !valorForm && !cidadeForm) {
       const datos = await extraerDatosTexto(mensajeForm, config, env.OPENROUTER_API_KEY || '');
       datosExtraidos = datos as unknown as Record<string, unknown>;
@@ -157,15 +205,53 @@ app.post('/api/analisar', async (c) => {
     // Mezcla datos
     const cnpj = cnpjForm || String(datosExtraidos.cnpj || '');
     const servico = servicoForm || String(datosExtraidos.servico || '');
-    const valor = valorForm ? parseFloat(valorForm.replace(',', '.')) : Number(datosExtraidos.valor || 0);
+    const valor = valorForm ? parseValorMonetario(valorForm) : Number(datosExtraidos.valor || 0);
     const cidade = cidadeForm || String(datosExtraidos.cidade || '');
-    const uf = ufForm || String(datosExtraidos.uf || 'MS');
+    const uf = ufForm || String(datosExtraidos.uf || '');
 
-    if (!cnpj || !servico || !cidade) {
-      return c.json({ status: 'error', error: 'Datos insuficientes. Informa CNPJ, servicio y ciudad.' });
+    const divergenciasCriticas = resultadoOcr?.campos_divergentes.filter((campo) => {
+      if (campo === 'cnpj') return !cnpjForm;
+      if (campo === 'servico') return !servicoForm;
+      if (campo === 'valor') return !valorForm;
+      if (campo === 'cidade') return !cidadeForm;
+      if (campo === 'uf') return !form.get('uf');
+      return false;
+    }) || [];
+
+    // Anexo nunca inicia análise diretamente: exige leitura/revisão confirmada pelo usuário.
+    if (archivo instanceof File && !dadosConfirmados) {
+      return c.json({
+        status: 'revisao_necessaria',
+        mensagem: 'Confira os campos extraídos da NFSe e confirme antes de iniciar a análise.',
+        dados_extraidos: { cnpj, servico, valor, cidade, uf },
+        candidatos_ocr: resultadoOcr?.candidatos || {},
+        confiança_ocr: resultadoOcr?.confianza ?? 0,
+        campos_divergentes: resultadoOcr?.campos_divergentes || [],
+        erros_ocr: resultadoOcr?.erros || [],
+      });
+    }
+
+    if (!cnpj || servico.trim().length < 3 || cidade.trim().length < 2 || !uf || (archivo instanceof File && valor <= 0) || divergenciasCriticas.length > 0) {
+      const problemasOcr = resultadoOcr?.erros.length ? ` Problemas na extração: ${resultadoOcr.erros.join('; ')}.` : '';
+      const camposDivergentes = resultadoOcr?.campos_divergentes.length
+        ? ` Os modelos divergiram em: ${resultadoOcr.campos_divergentes.join(', ')}.`
+        : '';
+      return c.json({
+        status: 'error',
+        error: `Dados insuficientes ou divergentes. Confirme CNPJ do prestador, serviço, valor, cidade e UF da NFSe.${problemasOcr}${camposDivergentes}`,
+        dados_extraidos: datosExtraidos,
+        campos_divergentes: resultadoOcr?.campos_divergentes || [],
+        erros_ocr: resultadoOcr?.erros || [],
+      }, 422);
     }
 
     const cnpjLimpio = cnpj.replace(/\D/g, '');
+    if (!validarCnpj(cnpjLimpio)) {
+      return c.json({ status: 'error', error: 'O CNPJ informado/extraído é inválido. Confirme o CNPJ do prestador na NFSe.' }, 422);
+    }
+    if (!validarUf(uf)) {
+      return c.json({ status: 'error', error: `UF inválida: ${uf}. Confirme a UF do município de prestação.` }, 422);
+    }
 
     // --- FASE 2: Consultas paralelas ---
     const empresa = await consultarCnpj(cnpjLimpio, config.minhaReceitaUrl);
@@ -175,7 +261,6 @@ app.post('/api/analisar', async (c) => {
         Object.assign(empresa, fallback);
       }
     }
-
     const correlacion = correlacionarPorCnae(empresa.cnae, servico);
     const correlacionFormatada = formatearCorrelacionParaLlm(correlacion);
 
@@ -226,6 +311,7 @@ app.post('/api/analisar', async (c) => {
       clasificacion_fiscal: clasificacionFiscal,
       confianza_ocr: resultadoOcr?.confianza,
       campos_divergentes_ocr: resultadoOcr?.campos_divergentes,
+      erros_ocr: resultadoOcr?.erros,
     };
 
     // Procesa en background (no bloquea la respuesta)
@@ -326,6 +412,9 @@ app.post('/api/extrair', async (c) => {
     const extension = archivo.name.includes('.')
       ? archivo.name.split('.').pop()!.toLowerCase()
       : 'png';
+    if (!['png', 'jpg', 'jpeg', 'pdf'].includes(extension)) {
+      return c.json({ status: 'error', error: 'Formato não suportado. Envie PNG, JPG ou PDF.' }, 415);
+    }
 
     let binary = '';
     for (const byte of bytes) {
@@ -333,8 +422,20 @@ app.post('/api/extrair', async (c) => {
     }
     const base64 = btoa(binary);
 
-    const resultado = await extraerDatosNfse(base64, extension, config, env.OPENROUTER_API_KEY || '');
-    return c.json({ status: 'sucesso', dados: resultado.dados, confianza: resultado.confianza, campos_divergentes: resultado.campos_divergentes });
+    let textoPdf: string | undefined;
+    if (extension === 'pdf') {
+      const { extrairTextoPdf } = await import('./pdf');
+      textoPdf = await extrairTextoPdf(bytes);
+    }
+    const resultado = await extraerDatosNfse(base64, extension, config, env.OPENROUTER_API_KEY || '', textoPdf);
+    return c.json({
+      status: 'sucesso',
+      requer_conferencia_humana: true,
+      dados: resultado.dados,
+      confianza: resultado.confianza,
+      campos_divergentes: resultado.campos_divergentes,
+      erros: resultado.erros,
+    });
   } catch (e) {
     return c.json({ status: 'error', error: `Error interno: ${e instanceof Error ? e.message : 'desconocido'}` });
   }
