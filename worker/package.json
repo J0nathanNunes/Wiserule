@@ -9,7 +9,8 @@
     "db:seed": "wrangler d1 execute wiserule-db --file=./migrations/002_seed.sql"
   },
   "dependencies": {
-    "hono": "^4.6.0"
+    "hono": "^4.6.0",
+    "pdfjs-dist": "^4.7.76"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260918.1",

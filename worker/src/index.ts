@@ -121,7 +121,7 @@ app.post('/api/analisar', async (c) => {
     if (archivo && archivo instanceof File) {
       const bytes = new Uint8Array(await archivo.arrayBuffer());
       if (bytes.length > config.maxFileSizeMb * 1024 * 1024) {
-        return c.json({ status: 'error', error: `Archivo muy grande. M+�ximo: ${config.maxFileSizeMb}MB` }, 413);
+        return c.json({ status: 'error', error: `Arquivo muito grande. Máximo: ${config.maxFileSizeMb}MB` }, 413);
       }
 
       const extension = archivo.name.includes('.')
@@ -135,7 +135,18 @@ app.post('/api/analisar', async (c) => {
       }
       const base64 = btoa(binary);
 
-      resultadoOcr = await extraerDatosNfse(base64, extension, config, env.OPENROUTER_API_KEY || '');
+      // Se for PDF, extrai texto para usar como fallback no OCR
+      let textoPdfExtraido: string | undefined;
+      if (extension === 'pdf') {
+        try {
+          const { extrairTextoPdf } = await import('./pdf');
+          textoPdfExtraido = await extrairTextoPdf(bytes);
+        } catch (e) {
+          console.error('[PDF] Erro ao extrair texto:', e);
+        }
+      }
+
+      resultadoOcr = await extraerDatosNfse(base64, extension, config, env.OPENROUTER_API_KEY || '', textoPdfExtraido);
       datosExtraidos = resultadoOcr.dados as unknown as Record<string, unknown>;
     } else if (mensajeForm && !cnpjForm && !servicoForm && !valorForm && !cidadeForm) {
       const datos = await extraerDatosTexto(mensajeForm, config, env.OPENROUTER_API_KEY || '');

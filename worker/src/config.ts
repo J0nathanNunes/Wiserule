@@ -36,6 +36,9 @@ export function getConfig(env: Env) {
     modeloOcr: env.MODELO_OCR || 'openai/gpt-4o-mini',
     modeloAnalise: env.MODELO_ANALISE || 'openai/gpt-4o-mini',
     modeloVision: env.MODELO_VISAO || 'openai/gpt-4o-mini',
+    // Modelos alternativos para redundância real (modelos diferentes = erros diferentes)
+    modeloOcrAlt: env.MODELO_OCR_ALT || 'google/gemini-2.0-flash-001',
+    modeloVisionAlt: env.MODELO_VISAO_ALT || 'anthropic/claude-3.5-sonnet',
     corsOrigins: (env.CORS_ORIGINS || 'https://wiserule.com,https://www.wiserule.com,http://localhost:3000')
       .split(',')
       .map((s) => s.trim())

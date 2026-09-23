@@ -28,6 +28,9 @@ MAX_FILE_SIZE_MB = "5"
 MODELO_OCR = "openai/gpt-4o-mini"
 MODELO_ANALISE = "openai/gpt-4o-mini"
 MODELO_VISAO = "openai/gpt-4o-mini"
+# Modelos alternativos para redundância real no OCR
+MODELO_OCR_ALT = "google/gemini-2.0-flash-001"
+MODELO_VISAO_ALT = "anthropic/claude-3.5-sonnet"
 
 # CORS
 CORS_ORIGINS = "https://wiserule.com,https://www.wiserule.com,https://wiserule.pages.dev,http://localhost:3000"

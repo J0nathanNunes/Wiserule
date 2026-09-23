@@ -1,4 +1,4 @@
-/**
+﻿﻿/**
  * Integração com OpenRouter (LLM) + OCR com conferência cruzada.
  * Equivalente a backend/agente_llm.py em Python.
  *
@@ -212,17 +212,24 @@ function compararCampos(a: DadosExtraidos, b: DadosExtraidos): { divergentes: st
 }
 
 /**
- * OCR com conferência cruzada.
- * - Para PDF: extrai texto com pdfjs-dist e envia ao LLM
- * - Para imagem: envia base64 ao LLM multimodal
- * - Faz 2 extrações independentes e as compara
- * - Se há divergências, faz 3ª verificação
+ * OCR com conferência cruzada e redundância real.
+ *
+ * Estratégia de máxima confiabilidade:
+ * 1. Extração primária: GPT-4o-mini (modelo A)
+ * 2. Extração secundária: Claude 3.5 Sonnet (modelo B - diferente do A)
+ * 3. Extração terciária: Gemini 2.0 Flash (modelo C - diferente de A e B)
+ * 4. Voto majoritário: campo que aparece em 2+ extrações vence
+ * 5. Validação: CNPJ (DV), UF (lista oficial), valor (positivo e razoável)
+ * 6. Fallback: regex no texto extraído do PDF (se disponível)
+ *
+ * Modelos diferentes = erros diferentes = chance muito menor de erro sistemático.
  */
 export async function extraerDatosNfse(
   archivoBase64: string,
   extension: string,
   config: Config,
   apiKey: string,
+  textoPdfExtraido?: string,
 ): Promise<ResultadoOcr> {
   const mimeType = {
     png: 'image/png',
@@ -244,15 +251,7 @@ export async function extraerDatosNfse(
   ];
 
   const res1 = await llamarLlm(mensajesPrimaria, config, apiKey, config.modeloVision, 0.1);
-  if (!res1.ok) {
-    return {
-      dados: { cnpj: '', servico: '', valor: 0, cidade: '', uf: '' },
-      confianza: 0,
-      campos_divergentes: [],
-      metodo: 'error',
-    };
-  }
-  const datos1 = normalizarDatos(extraerJson(res1.content || ''));
+  const datos1 = res1.ok ? normalizarDados(extraerJson(res1.content || '')) : { cnpj: '', servico: '', valor: 0, cidade: '', uf: '' };
 
   // --- Extração secundária (independente) ---
   const mensajesSecundaria = [
@@ -266,32 +265,53 @@ export async function extraerDatosNfse(
     },
   ];
 
-  const res2 = await llamarLlm(mensajesSecundaria, config, apiKey, config.modeloVision, 0.1);
+const res2 = await llamarLlm(mensajesSecundaria, config, apiKey, config.modeloVisionAlt, 0.1);
   const datos2 = res2.ok ? normalizarDatos(extraerJson(res2.content || '')) : datos1;
 
-  // --- Conferência cruzada ---
-  const { divergentes, coinciden } = compararCampos(datos1, datos2);
 
-  // Se há divergências, faz 3ª verificação
-  let datosFinales = datos1;
-  if (divergentes.length > 0) {
-    const mensajesConferencia = [
-      { role: 'system', content: SYSTEM_PROMPT_CONFERENCIA },
-      {
-        role: 'user',
-        content: `Extração 1: ${JSON.stringify(datos1)}\n\nExtração 2: ${JSON.stringify(datos2)}\n\nDecida os valores finais corretos.`,
-      },
-    ];
-    const res3 = await llamarLlm(mensajesConferencia, config, apiKey, config.modeloOcr, 0.1);
-    if (res3.ok) {
-      const datos3 = normalizarDatos(extraerJson(res3.content || ''));
-      if (datos3.cnpj || datos3.servico) {
-        datosFinales = datos3;
-      }
+  // --- Extração terciária: Gemini 2.0 Flash (outro modelo diferente) ---
+  const mensajesTerciaria = [
+    { role: 'system', content: SYSTEM_PROMPT_OCR },
+    {
+      role: 'user',
+      content: [
+        { type: 'text', text: 'Faça uma terceira extração independente dos dados desta NFSe. Retorne APENAS o JSON.' },
+        { type: 'image_url', image_url: { url: `data:${mimeType};base64,${archivoBase64}` } },
+      ],
+    },
+  ];
+
+  const res3 = await llamarLlm(mensajesTerciaria, config, apiKey, config.modeloOcrAlt, 0.1);
+  const datos3 = res3.ok ? normalizarDados(extraerJson(res3.content || '')) : datos1;
+
+  // --- Voto majoritário ---
+  const datosVotados = votarDados([datos1, datos2, datos3]);
+
+  // --- Validação ---
+  const { validarDadosExtraidos } = await import('./validacoes');
+  const validacao = validarDadosExtraidos(datosVotados);
+
+  // --- Fallback com regex se texto do PDF disponível ---
+  let datosFinales = validacao.dados;
+  if (textoPdfExtraido) {
+    const { extrairCnpjsDoTexto, extrairValoresDoTexto, extrairUfsDoTexto } = await import('./validacoes');
+    const cnpjsRegex = extrairCnpjsDoTexto(textoPdfExtraido);
+    const valoresRegex = extrairValoresDoTexto(textoPdfExtraido);
+    const ufsRegex = extrairUfsDoTexto(textoPdfExtraido);
+
+    if (cnpjsRegex.length > 0 && (!datosFinales.cnpj || datosFinales.cnpj.replace(/\D/g, '').length < 14)) {
+      datosFinales.cnpj = cnpjsRegex[0];
+    }
+    if (valoresRegex.length > 0 && (!datosFinales.valor || datosFinales.valor === 0)) {
+      datosFinales.valor = valoresRegex[0];
+    }
+    if (ufsRegex.length > 0 && (!datosFinales.uf || datosFinales.uf.length !== 2)) {
+      datosFinales.uf = ufsRegex[0];
     }
   }
 
-  // Confiança: campos coincidentes / total de campos com dados
+  // --- Cálculo de confiança ---
+  const { divergentes, coinciden } = compararCampos(datos1, datos2);
   const camposConDatos = coinciden.length + divergentes.length;
   const confianza = camposConDatos > 0 ? coinciden.length / camposConDatos : 0;
 
@@ -299,10 +319,50 @@ export async function extraerDatosNfse(
     dados: datosFinales,
     confianza,
     campos_divergentes: divergentes,
-    metodo: divergentes.length > 0 ? 'conferencia_cruzada' : 'doble_extraccion',
+    metodo: 'triple_extraccion_multimodelo',
   };
 }
 
+/**
+ * Voto majoritário entre 3 extrações.
+ * Para cada campo, o valor que aparece em 2+ extrações vence.
+ * Se todos divergem, usa o primeiro não vazio.
+ */
+function votarDados(extracoes: DadosExtraidos[]): DadosExtraidos {
+  const campos: (keyof DadosExtraidos)[] = ['cnpj', 'servico', 'valor', 'cidade', 'uf'];
+  const resultado: DadosExtraidos = { cnpj: '', servico: '', valor: 0, cidade: '', uf: '' };
+
+  for (const campo of campos) {
+    const valores = extracoes.map((e) => String(e[campo] ?? '').trim());
+    const contagem: Record<string, number> = {};
+    for (const v of valores) {
+      if (v) contagem[v] = (contagem[v] || 0) + 1;
+    }
+
+    // Encontra o valor com mais ocorrências
+    let maxCount = 0;
+    let valorVencedor = '';
+    for (const [valor, count] of Object.entries(contagem)) {
+      if (count > maxCount) {
+        maxCount = count;
+        valorVencedor = valor;
+      }
+    }
+
+    // Se não há maioria (todos diferentes), usa o primeiro não vazio
+    if (maxCount < 2) {
+      valorVencedor = valores.find((v) => v) || '';
+    }
+
+    if (campo === 'valor') {
+      resultado[campo] = parseFloat(valorVencedor) || 0;
+    } else {
+      (resultado as any)[campo] = valorVencedor;
+    }
+  }
+
+  return resultado;
+}
 export async function extraerDatosTexto(
   texto: string,
   config: Config,
