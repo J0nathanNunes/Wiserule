@@ -254,6 +254,23 @@ app.post('/api/analisar', async (c) => {
     }
 
     // --- FASE 2: Consultas paralelas ---
+    const taskId = generarTaskId();
+    const id = c.env.DB ? `${taskId}` : taskId;
+    const doId = c.env.TAREA_ANALISIS.idFromName(id);
+    const doObj = c.env.TAREA_ANALISIS.get(doId);
+    await doObj.fetch(`https://tarea/${id}/inicializar`, {
+      method: 'POST',
+      body: JSON.stringify({ id: taskId }),
+    });
+
+    const inicioEm = new Date().toISOString();
+    const actualizarEtapa = (etapa: string, progreso: number) =>
+      doObj.fetch(`https://tarea/${id}/actualizar`, {
+        method: 'POST',
+        body: JSON.stringify({ status: 'procesando', progreso, etapa_actual: etapa, inicio_em: inicioEm }),
+      });
+
+    await actualizarEtapa('Consultando Receita Federal...', 20);
     const empresa = await consultarCnpj(cnpjLimpio, config.minhaReceitaUrl);
     if (!empresa.razon_social && empresa.situacion && empresa.situacion.startsWith('Erro')) {
       const fallback = await consultarCnpjFallback(cnpjLimpio);
@@ -265,12 +282,14 @@ app.post('/api/analisar', async (c) => {
     const correlacionFormatada = formatearCorrelacionParaLlm(correlacion);
 
     // --- FASE 3: B+�squeda online ---
+    await actualizarEtapa('Consultando legislação aplicable...', 40);
     const cnaeStr = empresa.cnae || servico;
     const pregunta = `${cnaeStr} ${servico} retenci+�n ISS ${cidade} ${uf} LC 116 legislaci+�n`;
     const resultadosBusca = await buscarOnline(pregunta, env);
     const buscaFormatada = formatearBuscaParaLlm(resultadosBusca);
 
     // --- FASE 4: Clasificaci+�n fiscal ---
+    await actualizarEtapa('Calculando retenções e tributos...', 60);
     const lc116Codigo = correlacion.lc116;
     const clasificacionFiscal = formatearClasificacionParaLlm({
       lc116Codigo,
@@ -283,18 +302,6 @@ app.post('/api/analisar', async (c) => {
       cnaeServicio: empresa.cnae,
       descripcionServicio: servico,
       prestadorEsMei: empresa.mei,
-    });
-
-    // --- FASE 5: Generar an+�lisis (en background via Durable Object) ---
-    const taskId = generarTaskId();
-    const id = c.env.DB ? `${taskId}` : taskId;
-
-    // Crea el Durable Object
-    const doId = c.env.TAREA_ANALISIS.idFromName(id);
-    const doObj = c.env.TAREA_ANALISIS.get(doId);
-    await doObj.fetch(`https://tarea/${id}/inicializar`, {
-      method: 'POST',
-      body: JSON.stringify({ id: taskId }),
     });
 
     // Dispara el procesamiento en background
@@ -318,11 +325,7 @@ app.post('/api/analisar', async (c) => {
     c.executionCtx.waitUntil(
       (async () => {
         try {
-          await doObj.fetch(`https://tarea/${id}/actualizar`, {
-            method: 'POST',
-            body: JSON.stringify({ status: 'procesando', progreso: 60, etapa_actual: 'Gerando relatório completo...' }),
-          });
-
+          await actualizarEtapa('Gerando relatório completo...', 80);
           const relatorio = await generarAnalisis(contexto, config, env.OPENROUTER_API_KEY || '');
 
           // Normaliza encoding (corrige caracteres corrompidos)
@@ -345,7 +348,7 @@ app.post('/api/analisar', async (c) => {
 
           await doObj.fetch(`https://tarea/${id}/actualizar`, {
             method: 'POST',
-            body: JSON.stringify({ status: 'concluido', progreso: 100, etapa_actual: 'Análise concluída.', relatorio_completo: relatorioBase64 }),
+            body: JSON.stringify({ status: 'concluido', progreso: 100, etapa_actual: 'Análise concluída.', inicio_em: inicioEm, relatorio_completo: relatorioBase64 }),
           });
         } catch (e) {
           await doObj.fetch(`https://tarea/${id}/actualizar`, {

@@ -246,13 +246,15 @@ export function extrairDadosRotuladosNfse(texto: string): DadosRotuladosNfse {
   const valoresServico: string[] = [];
   linhas.forEach((linha, indice) => {
     const linhaNormalizada = normalizar(linha);
-    const rotulo = linhaNormalizada.match(/(?:(?:discriminacao|descricao)(?: dos)? servicos?|servico prestado|descricao do servico)\s*[:\-]?\s*(.*)$/);
+    // Prioriza "descrição do serviço prestado" (que contiene la descripción real).
+    // "SERVIÇO PRESTADO" como rótulo de sección no debe tomarse como descripción.
+    const rotulo = linhaNormalizada.match(/(?:(?:discriminacao|descricao)(?:\s+dos?)?\s+servi.{0,2}os?(?:\s+prestado)?|descricao do servico)\s*[:\-]?\s*(.*)$/);
     if (!rotulo) return;
-    const rotuloComValor = linha.match(/(?:(?:discrimina.{0,2}o|descri.{0,2}o)(?:\s+dos?)?\s+servi.{0,2}os?|servi.{0,2}o prestado|descri.{0,2}o do servi.{0,2}o)\s*[:\-]?\s*(.*)$/i);
+    const rotuloComValor = linha.match(/(?:(?:discrimina.{0,2}o|descri.{0,2}o)(?:\s+dos?)?\s+servi.{0,2}os?(?:\s+prestado)?|descri.{0,2}o do servi.{0,2}o)\s*[:\-]?\s*(.*)$/i);
     let valor = rotuloComValor?.[1]?.trim() || '';
     if (!valor && linhas[indice + 1]) {
       const proxima = linhas[indice + 1];
-      if (!/^(?:valor|iss|retenc|cnae|codigo|municipio|local|cnpj)\b/i.test(normalizar(proxima))) valor = proxima;
+      if (!/^(?:valor|iss|retenc|cnae|codigo|municipio|local|cnpj|total|base)\b/i.test(normalizar(proxima))) valor = proxima;
     }
     if (valor.length >= 3) valoresServico.push(valor.slice(0, 1000));
   });
@@ -265,6 +267,7 @@ export function extrairDadosRotuladosNfse(texto: string): DadosRotuladosNfse {
   const padraoValor = /(?:valor\s+(?:total(?:\s+da\s+nota)?|dos\s+servicos|do\s+servico)|total\s+(?:da\s+nota|dos\s+servicos))\s*[:\-]?\s*(?:R\$\s*)?((?:\d{1,3}(?:\.\d{3})+|\d+)(?:,\d{1,2})?)/i;
   for (let indice = 0; indice < linhas.length; indice++) {
     const linha = linhas[indice];
+    const linhaNormalizada = normalizar(linha);
     const textoLinha = normalizar(`${linha} ${linhas[indice + 1] || ''}`);
     const match = textoLinha.match(padraoValor);
     if (!match) continue;
@@ -274,6 +277,18 @@ export function extrairDadosRotuladosNfse(texto: string): DadosRotuladosNfse {
     if (/\b(?:liquido|iss|retenc|desconto|deducao|irrf|pis|cofins|csll)\b/i.test(contexto)) continue;
     if (Number.isFinite(valor) && valor > 0 && valor <= 10_000_000) valoresRotulados.push(valor);
   }
+  // Formato de tabla: "Valor total da NFSe (R$)" en la línea de cabecera y el
+  // valor en la línea siguiente (ej.: "R$ 450,00 R$ 0,00 ..."). Tomar el primer
+  // valor monetario de la línea siguiente como total.
+  for (let indice = 0; indice < linhas.length; indice++) {
+    const linhaNormalizada = normalizar(linhas[indice]);
+    if (!/valor\s+total(?:\s+da\s+nota)?\s*(?:\(r\$\))?/.test(linhaNormalizada)) continue;
+    const proxima = linhas[indice + 1] || '';
+    const valores = proxima.match(/(?:R\$\s*)?((?:\d{1,3}(?:\.\d{3})+|\d+)(?:,\d{1,2})?)/g);
+    if (!valores) continue;
+    const primerValor = Number(valores[0].replace(/[^\d,.-]/g, '').replace(/\./g, '').replace(',', '.'));
+    if (Number.isFinite(primerValor) && primerValor > 0 && primerValor <= 10_000_000) valoresRotulados.push(primerValor);
+  }
   if (valoresRotulados.length) {
     candidatos.valor = [...new Set(valoresRotulados)].map(String);
     if (candidatos.valor.length === 1) dados.valor = valoresRotulados[0];
@@ -281,15 +296,40 @@ export function extrairDadosRotuladosNfse(texto: string): DadosRotuladosNfse {
 
   const cidades: string[] = [];
   const ufs: string[] = [];
-  for (const linha of linhas) {
+  for (let indice = 0; indice < linhas.length; indice++) {
+    const linha = linhas[indice];
     const linhaNormalizada = normalizar(linha);
-      const cidadeMatch = linhaNormalizada.match(/(?:municipio|local)(?:\s+(?:da|de)\s+(?:prestacao(?:\s+dos\s+servicos)?|incidencia(?:\s+do\s+iss)?))\s*[:\-]\s*(?:municipio\s+de\s+)?([^;|]+?)(?:\s*(?:\/|\s+-\s+)\s*([A-Z]{2}))?\s*$/i);
+    const cidadeMatch = linhaNormalizada.match(/(?:municipio|local)(?:\s+(?:da|de)\s+(?:prestacao(?:\s+dos\s+servicos)?|incidencia(?:\s+do\s+iss)?))\s*[:\-]\s*(?:municipio\s+de\s+)?([^;|]+?)(?:\s*(?:\/|\s+-\s+)\s*([A-Z]{2}))?\s*$/i);
     if (cidadeMatch && !/tomador|prestador|incidencia do iss/.test(normalizar(cidadeMatch[1]))) {
       const inicioValor = linhaNormalizada.indexOf(cidadeMatch[1]);
       const cidadeBruta = inicioValor >= 0 ? linha.slice(inicioValor, inicioValor + cidadeMatch[1].length) : cidadeMatch[1];
       const cidade = cidadeBruta.trim().replace(/\s+(?:UF|estado)\s*[:\-].*$/i, '').trim();
       if (cidade.length >= 2) cidades.push(cidade);
       if (cidadeMatch[2] && validarUf(cidadeMatch[2])) ufs.push(cidadeMatch[2].toUpperCase());
+    }
+    // Formato de tabla: "Local da prestação do serviço" en la cabecera y
+    // "CAMPO GRANDE / MS BRASIL" en la línea siguiente.
+    // Modelo nacional: "Local da Prestação / Sigla UF / País" y
+    // "Campo Grande / MS / -" en la línea siguiente.
+    if (/local\s+(?:da|de)\s+prestacao(?:\s+dos\s+servicos)?/.test(linhaNormalizada)) {
+      const proxima = linhas[indice + 1] || '';
+      const matchLocal = proxima.match(/([A-ZÁÉÍÓÚÂÊÎÔÛÄËÏÖÜÇÑ][A-ZÁÉÍÓÚÂÊÎÔÛÄËÏÖÜÇÑa-záéíóúâêîôûäëïöüçñ ]+?)\s*\/\s*([A-Z]{2})\b/i);
+      if (matchLocal) {
+        const cidade = matchLocal[1].trim();
+        if (cidade.length >= 2) cidades.push(cidade);
+        if (validarUf(matchLocal[2])) ufs.push(matchLocal[2].toUpperCase());
+      }
+    }
+    // Modelo nacional: "Local da Prestación / Sigla UF / País" en la cabecera
+    // del servicio y "Campo Grande / MS / -" en la línea siguiente.
+    if (/local\s+da\s+prestacion\s*\/\s*sigla\s+uf/.test(linhaNormalizada)) {
+      const proxima = linhas[indice + 1] || '';
+      const matchLocal = proxima.match(/([A-ZÁÉÍÓÚÂÊÎÔÛÄËÏÖÜÇÑ][A-ZÁÉÍÓÚÂÊÎÔÛÄËÏÖÜÇÑa-záéíóúâêîôûäëïöüçñ ]+?)\s*\/\s*([A-Z]{2})\b/i);
+      if (matchLocal) {
+        const cidade = matchLocal[1].trim();
+        if (cidade.length >= 2) cidades.push(cidade);
+        if (validarUf(matchLocal[2])) ufs.push(matchLocal[2].toUpperCase());
+      }
     }
     if (/\buf\s*[:\-]/i.test(linha)) {
       const uf = linha.match(/\buf\s*[:\-]\s*([A-Z]{2})\b/i)?.[1];

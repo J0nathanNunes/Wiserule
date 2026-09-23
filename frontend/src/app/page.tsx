@@ -108,10 +108,17 @@ Sou um assistente especializado em análise de Notas Fiscais de Serviço. Posso 
     ? `${process.env.NEXT_PUBLIC_API_URL}/api`
     : '/api';
 
-  // Polling: acompanha o progresso da tarefa
+  // Polling: acompanha o progresso da tarefa e mostra os passos no chat
   const pollTask = async (taskId: string, assistantMsgId: string) => {
     const maxAttempts = 60; // 60 * 2s = 120s timeout
     let attempts = 0;
+    let ultimaEtapa = '';
+    let inicioEm: number | null = null;
+
+    const formatearTempo = (ms: number) => {
+      if (ms < 1000) return `${Math.round(ms)}ms`;
+      return `${(ms / 1000).toFixed(1)}s`;
+    };
 
     const poll = async () => {
       try {
@@ -129,15 +136,29 @@ Sou um assistente especializado em análise de Notas Fiscais de Serviço. Posso 
           return;
         }
 
+        // Registra o início para calcular o tempo decorrido
+        if (data.inicio_em && !inicioEm) {
+          inicioEm = new Date(data.inicio_em).getTime();
+        }
+
         // Atualiza status
-        setStatusMsg(data.etapa_atual || `Analisando... (${data.progresso || 0}%)`);
+        setStatusMsg(data.etapa_actual || `Analisando... (${data.progresso || 0}%)`);
+
+        // Mostra cada etapa como uma mensagem de progresso no chat
+        const etapa = data.etapa_actual || '';
+        if (etapa && etapa !== ultimaEtapa && data.status !== 'concluido') {
+          ultimaEtapa = etapa;
+          const tempo = inicioEm ? formatearTempo(Date.now() - inicioEm) : '';
+          addMessage('assistant', `⏳ **${etapa}**${tempo ? ` · ${tempo}` : ''}`);
+        }
 
         if (data.status === 'concluido' && data.relatorio_completo) {
           // Decodifica Base64 (el backend codifica el relatório para protegerlo del Durable Object)
           const relatorio = decodificarRelatorio(data.relatorio_completo);
+          const tempoTotal = inicioEm ? formatearTempo(Date.now() - inicioEm) : '';
           setMessages((prev) =>
             prev.map((m) =>
-              m.id === assistantMsgId ? { ...m, content: relatorio } : m
+              m.id === assistantMsgId ? { ...m, content: `✅ **Análise concluída**${tempoTotal ? ` em ${tempoTotal}` : ''}.\n\n${relatorio}` } : m
             )
           );
           setIsLoading(false);
@@ -238,11 +259,15 @@ Sou um assistente especializado em análise de Notas Fiscais de Serviço. Posso 
   const solicitarRevisaoOcr = async (arquivo: File, texto: string, dadosIniciais?: FormData) => {
     setIsLoading(true);
     setStatusMsg('Lendo a NFSe para revisão...');
+    const t0 = Date.now();
+    addMessage('assistant', '⏳ **Lendo documento...**');
     const payload = new FormData();
     payload.append('archivo', arquivo);
     try {
       const response = await fetch(`${API_BASE}/analisar`, { method: 'POST', body: payload });
       const data = await response.json();
+      const t1 = Date.now();
+      addMessage('assistant', `⏳ **Extraendo informações...** · ${((t1 - t0) / 1000).toFixed(1)}s`);
       if (!response.ok || data.status !== 'revisao_necessaria') {
         throw new Error(data.error || data.mensagem || `HTTP ${response.status}`);
       }

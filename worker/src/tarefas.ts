@@ -12,6 +12,7 @@ export interface Tarea {
   id: string;
   status: 'aguardando' | 'procesando' | 'parcial' | 'concluido' | 'error';
   creado_em: string;
+  inicio_em?: string;
   etapa_actual: string;
   progreso: number;
   relatorio_completo: string | null;
