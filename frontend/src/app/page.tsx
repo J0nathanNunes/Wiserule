@@ -349,12 +349,6 @@ Sou um assistente especializado em análise de Notas Fiscais de Serviço. Posso 
     if (camposConflitantes.length) {
       addMessage('assistant', `Atenção: encontrei mais de uma leitura para ${camposConflitantes.map(({ rotulo }) => rotulo).join(', ')}. Vou perguntar esses campos no chat e não vou selecionar um automaticamente.`);
     }
-    if (camposPerguntar.length < CAMPOS_REVISAO.length) {
-      const legiveis = CAMPOS_REVISAO
-        .filter(({ chave }) => !camposPerguntar.includes(chave))
-        .map(({ chave, rotulo }) => `${rotulo}: ${revisao[chave]}`);
-      if (legiveis.length) addMessage('assistant', `Já consegui ler estes campos e não vou pedir que os redigite: ${legiveis.join(' · ')}. Confira-os no original antes da confirmação final.`);
-    }
   };
 
   const perguntaCampoRevisao = (chave: RevisaoOcr['camposPerguntar'][number], dados: Pick<RevisaoOcr, 'cnpj' | 'servico' | 'valor' | 'cidade' | 'uf'>, candidatos: Record<string, string[]>, erros: string[] = []) => {

@@ -326,12 +326,12 @@ export async function extraerDatosNfse(
               return !valorModelo || chaveComparacao(campo, valorModelo) === chaveComparacao(campo, String(valor));
             })
           : modelosCorrespondentes.length >= 2;
-        // Para "servico" (Serviço Prestado), a evidência estrutural do rótulo
-        // prevalece: é o código + descrição oficial da legislação, distinto da
-        // "Descrição do Serviço" (informativo). Não deve ser descartado por
-        // divergência dos modelos que podem mezclar ambos campos.
-        const servicoPrevalece = campo === 'servico' && textoNativoPdf;
-        if (valor !== undefined && valor !== '' && (modelosConcordam || servicoPrevalece)) {
+        // Para "servico" (Serviço Prestado) e "cnpj" (prestador), a evidência
+        // estrutural do rótulo prevalece: distingue prestador de tomador e
+        // serviço prestado de descrição informativa. Não deve ser descartado
+        // por divergência dos modelos que podem mezclar ambos campos.
+        const evidenciaPrevalece = (campo === 'servico' || campo === 'cnpj') && textoNativoPdf;
+        if (valor !== undefined && valor !== '' && (modelosConcordam || evidenciaPrevalece)) {
           (datosVotados as any)[campo] = valor;
           candidatos[campo] = [String(valor)];
           divergenciasResolvidas.add(campo);
