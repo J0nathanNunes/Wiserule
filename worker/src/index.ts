@@ -281,14 +281,14 @@ app.post('/api/analisar', async (c) => {
     const correlacion = correlacionarPorCnae(empresa.cnae, servico);
     const correlacionFormatada = formatearCorrelacionParaLlm(correlacion);
 
-    // --- FASE 3: B+�squeda online ---
+    // --- FASE 3: Búsqueda online ---
     await actualizarEtapa('Consultando legislação aplicable...', 40);
     const cnaeStr = empresa.cnae || servico;
     const pregunta = `${cnaeStr} ${servico} retenci+�n ISS ${cidade} ${uf} LC 116 legislaci+�n`;
     const resultadosBusca = await buscarOnline(pregunta, env);
     const buscaFormatada = formatearBuscaParaLlm(resultadosBusca);
 
-    // --- FASE 4: Clasificaci+�n fiscal ---
+    // --- FASE 4: Clasificación fiscal ---
     await actualizarEtapa('Calculando retenções e tributos...', 60);
     const lc116Codigo = correlacion.lc116;
     const clasificacionFiscal = formatearClasificacionParaLlm({
@@ -304,7 +304,7 @@ app.post('/api/analisar', async (c) => {
       prestadorEsMei: empresa.mei,
     });
 
-    // Dispara el procesamiento en background
+    // Dispara o processamento em background
     const contexto = {
       empresa,
       correlacion_formatada: correlacionFormatada,
@@ -321,7 +321,7 @@ app.post('/api/analisar', async (c) => {
       erros_ocr: resultadoOcr?.erros,
     };
 
-    // Procesa en background (no bloquea la respuesta)
+    // Processa em background (não bloquea a resposta)
     c.executionCtx.waitUntil(
       (async () => {
         try {
@@ -331,10 +331,10 @@ app.post('/api/analisar', async (c) => {
           // Normaliza encoding (corrige caracteres corrompidos)
           const relatorioNormalizado = normalizarEncoding(relatorio);
 
-          // Codifica en Base64 para proteger contra corrupción del Durable Object
+          // Codifica em Base64 para proteger contra corrupção do Durable Object
           const relatorioBase64 = codificarBase64(relatorioNormalizado);
 
-          // Guarda en D1
+          // Guarda em D1
           if (env.DB) {
             await salvarAnalise(env.DB, {
               cnpj: cnpjLimpio,
