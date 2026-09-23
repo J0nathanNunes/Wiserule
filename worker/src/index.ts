@@ -8,6 +8,7 @@ import { cors } from 'hono/cors';
 import { getConfig, Env } from './config';
 import { consultarCnpj, consultarCnpjFallback, emptyEmpresa } from './cnpj';
 import { extraerDatosNfse, extraerDatosTexto, generarAnalisis, normalizarEncoding } from './llm';
+import { codificarBase64, decodificarBase64 } from './encoding';
 import { buscarOnline, formatearBuscaParaLlm } from './busca';
 import { correlacionarPorCnae, formatearCorrelacionParaLlm } from './correlacao';
 import { formatearClasificacionParaLlm } from './classificacao';
@@ -241,6 +242,9 @@ app.post('/api/analisar', async (c) => {
           // Normaliza encoding (corrige caracteres corrompidos)
           const relatorioNormalizado = normalizarEncoding(relatorio);
 
+          // Codifica en Base64 para proteger contra corrupción del Durable Object
+          const relatorioBase64 = codificarBase64(relatorioNormalizado);
+
           // Guarda en D1
           if (env.DB) {
             await salvarAnalise(env.DB, {
@@ -255,7 +259,7 @@ app.post('/api/analisar', async (c) => {
 
           await doObj.fetch(`https://tarea/${id}/actualizar`, {
             method: 'POST',
-            body: JSON.stringify({ status: 'concluido', progreso: 100, etapa_actual: 'Análise concluída.', relatorio_completo: relatorioNormalizado }),
+            body: JSON.stringify({ status: 'concluido', progreso: 100, etapa_actual: 'Análise concluída.', relatorio_completo: relatorioBase64 }),
           });
         } catch (e) {
           await doObj.fetch(`https://tarea/${id}/actualizar`, {
@@ -287,9 +291,9 @@ app.get('/api/analisar/status/:taskId', async (c) => {
     const res = await doObj.fetch(`https://tarea/${id}/status`);
     const tarea = await res.json() as any;
 
-    // Normaliza encoding do relatório (corrige mojibake do Durable Object)
+    // Decodifica el relatório de Base64 (protegido contra corrupción del DO)
     if (tarea.relatorio_completo) {
-      tarea.relatorio_completo = normalizarEncoding(tarea.relatorio_completo);
+      tarea.relatorio_completo = decodificarBase64(tarea.relatorio_completo);
     }
     if (tarea.etapa_actual) {
       tarea.etapa_actual = normalizarEncoding(tarea.etapa_actual);
