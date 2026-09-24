@@ -7,7 +7,7 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { getConfig, Env } from './config';
 import { consultarCnpj, consultarCnpjFallback, emptyEmpresa } from './cnpj';
-import { extraerDatosNfse, extraerDatosTexto, generarAnalisis } from './llm';
+import { extraerDatosNfse, extraerDatosTexto, generarAnalisis, responderChatFiscal } from './llm';
 import { codificarBase64, decodificarBase64 } from './encoding';
 import { buscarOnline, formatearBuscaParaLlm } from './busca';
 import { correlacionarPorCnae, formatarCorrelacaoParaLlm } from './correlacao';
@@ -127,6 +127,54 @@ app.get('/api/health/detalhado', (c) => {
       backend: { status: 'online', version: '2.0.0' },
     },
   });
+});
+
+// Conversa fiscal, independente do fluxo de análise de NFSe.
+app.post('/api/chat', async (c) => {
+  const apiKey = c.env.OPENROUTER_API_KEY || '';
+  if (!apiKey) {
+    return c.json({ status: 'error', error: 'O assistente fiscal não está configurado no momento.' }, 503);
+  }
+
+  try {
+    const body = await c.req.json<{ mensagens?: unknown }>();
+    if (!Array.isArray(body.mensagens) || body.mensagens.length === 0 || body.mensagens.length > 12) {
+      return c.json({ status: 'error', error: 'Envie uma conversa com até 12 mensagens.' }, 400);
+    }
+
+    const mensagens: Array<{ role: 'user' | 'assistant'; content: string }> = [];
+    let totalCaracteres = 0;
+    for (const item of body.mensagens) {
+      if (!item || typeof item !== 'object') {
+        return c.json({ status: 'error', error: 'Formato de mensagem inválido.' }, 400);
+      }
+      const mensagem = item as { role?: unknown; content?: unknown };
+      if ((mensagem.role !== 'user' && mensagem.role !== 'assistant') || typeof mensagem.content !== 'string') {
+        return c.json({ status: 'error', error: 'Formato de mensagem inválido.' }, 400);
+      }
+      const content = mensagem.content.trim();
+      if (!content || content.length > 4000) {
+        return c.json({ status: 'error', error: 'Cada mensagem deve ter entre 1 e 4.000 caracteres.' }, 400);
+      }
+      totalCaracteres += content.length;
+      mensagens.push({ role: mensagem.role, content });
+    }
+
+    if (totalCaracteres > 10000 || mensagens[mensagens.length - 1].role !== 'user') {
+      return c.json({ status: 'error', error: 'A conversa é longa demais ou não termina com uma pergunta do usuário.' }, 400);
+    }
+
+    const resultado = await responderChatFiscal(mensagens, getConfig(c.env), apiKey);
+    if (!resultado.ok || !resultado.resposta) {
+      console.error('[CHAT] Falha ao gerar resposta fiscal:', resultado.error);
+      return c.json({ status: 'error', error: 'Não foi possível responder agora. Tente novamente em instantes.' }, 502);
+    }
+
+    return c.json({ status: 'sucesso', resposta: resultado.resposta });
+  } catch (e) {
+    console.error('[CHAT] Erro na conversa fiscal:', e);
+    return c.json({ status: 'error', error: 'Não foi possível processar a mensagem.' }, 400);
+  }
 });
 
 // An+�lisis de NFSe

@@ -529,34 +529,33 @@ export default function Home() {
       return;
     }
     setIsLoading(true);
-    setStatusMsg('Analisando...');
+    setStatusMsg('Consultando o assistente fiscal...');
 
-    const formPayload = new FormData();
-    formPayload.append('mensagem', texto);
-
-    if (arquivo) {
-      formPayload.append('arquivo', arquivo);
-    }
+    const historico = messages
+      .filter((mensagem) =>
+        !mensagem.id.startsWith('welcome') &&
+        !mensagem.content.startsWith('⏳') &&
+        !mensagem.content.startsWith('✅ **Análise concluída')
+      )
+      .slice(-8)
+      .map(({ role, content }) => ({ role, content: content.slice(-1500) }));
+    historico.push({ role: 'user', content: texto.slice(0, 4000) });
 
     try {
-      const response = await fetch(`${API_BASE}/analisar`, {
+      const response = await fetch(`${API_BASE}/chat`, {
         method: 'POST',
-        body: formPayload,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mensagens: historico }),
       });
 
       const data = await response.json();
-
-      const assistantMsg = addMessage('assistant', '⏳ **Analisando...**');
-
-      if (data.dados_extraidos?.task_id) {
-        pollTask(data.dados_extraidos.task_id, assistantMsg.id);
-      } else {
-        addMessage('assistant', data.resumo || '❌ **A análise não foi iniciada:** o servidor não retornou o identificador da tarefa. Tente novamente.');
-        setIsLoading(false);
-        setStatusMsg('');
+      if (!response.ok || data.status !== 'sucesso' || !data.resposta) {
+        throw new Error(data.error || `HTTP ${response.status}`);
       }
-    } catch (error: any) {
-      addMessage('assistant', `❌ **Erro de conexão:** ${error.message}`);
+      addMessage('assistant', data.resposta);
+    } catch (error) {
+      addMessage('assistant', `❌ **Não foi possível obter uma resposta:** ${error instanceof Error ? error.message : 'erro de conexão'}`);
+    } finally {
       setIsLoading(false);
       setStatusMsg('');
     }
@@ -590,22 +589,6 @@ export default function Home() {
 
       {/* Main Chat Area */}
       <div className="chat-main-area flex-1 flex flex-col min-w-0">
-        {/* Header */}
-        <header className="chat-topbar flex items-center gap-3 px-6 py-4 border-b">
-          <div className="flex items-center gap-3">
-            <span className="h-7 w-[2px] bg-[#d4a45c]" aria-hidden="true" />
-            <div>
-              <h1 className="text-sm font-semibold tracking-wide text-[#f0f1f3]">Análise fiscal</h1>
-              <p className="mt-0.5 text-[9px] uppercase tracking-[.16em] text-[#818b99]">Documentos · NFS-e · retenções</p>
-            </div>
-          </div>
-
-          <span className="ml-auto hidden items-center gap-2 text-[10px] uppercase tracking-[.13em] text-[#77818f] sm:flex">
-            <span className="h-1.5 w-1.5 rounded-full bg-[#d4a45c]" />
-            Wiserule · fiscal
-          </span>
-        </header>
-
         {/* Messages */}
         <div className="chat-scroll flex-1 overflow-y-auto px-4 py-6 space-y-4">
           {messages.map((msg) => msg.id.startsWith('welcome') ? (

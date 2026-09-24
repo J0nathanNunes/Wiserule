@@ -272,7 +272,6 @@ button { cursor: pointer; }
 .markdown-body { overflow-wrap: anywhere; }
 
 @media (max-width: 640px) {
-  .chat-topbar { padding: .8rem 1rem; }
   .chat-scroll { padding: 1rem .8rem; }
   .welcome-stage { min-height: auto; padding: .5rem 0 1rem; }
   .welcome-prompts { grid-template-columns: 1fr; gap: .5rem; }
