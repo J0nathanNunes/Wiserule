@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build && cp public/_redirects out/_redirects",
+    "build": "next build && node -e \"require('node:fs').copyFileSync('public/_redirects', 'out/_redirects')\"",
     "start": "next start",
     "lint": "next lint"
   },

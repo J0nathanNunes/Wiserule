@@ -1,16 +1,24 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
 
 type ChatInputProps = {
   onSend: (text: string, file?: File | null) => void;
   isLoading: boolean;
+  suggestion?: { text: string; key: number } | null;
 };
 
-export default function ChatInput({ onSend, isLoading }: ChatInputProps) {
+export default function ChatInput({ onSend, isLoading, suggestion }: ChatInputProps) {
   const [input, setInput] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (!suggestion) return;
+    setInput(suggestion.text);
+    textareaRef.current?.focus();
+  }, [suggestion]);
 
   const handleSubmit = () => {
     const text = input.trim();
@@ -20,6 +28,8 @@ export default function ChatInput({ onSend, isLoading }: ChatInputProps) {
     onSend(text, selectedFile);
     setInput('');
     setSelectedFile(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+    if (textareaRef.current) textareaRef.current.style.height = 'auto';
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -48,94 +58,73 @@ export default function ChatInput({ onSend, isLoading }: ChatInputProps) {
   };
 
   return (
-    <div className="chat-composer border-t px-4 py-4">
-      {/* File preview */}
-      {selectedFile && (
-        <div className="flex items-center gap-2 mb-3 px-3 py-2 bg-white border border-[#dce3df] rounded-sm max-w-fit">
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-[#397b78]">Arquivo</span>
-          <span className="text-sm text-[#3c4848] truncate max-w-[200px]">
-            {selectedFile.name}
-          </span>
-          <span className="text-xs text-slate-500">
-            ({(selectedFile.size / 1024).toFixed(1)} KB)
-          </span>
-          <button
-            onClick={() => {
-              setSelectedFile(null);
-              if (fileInputRef.current) fileInputRef.current.value = '';
-            }}
-            className="text-[#758182] hover:text-red-700 ml-2"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-      )}
+    <div className="chat-composer border-t px-4 py-4 sm:px-6 sm:py-5">
+      <div className="composer-inner">
+        <div className="composer-box">
+          {selectedFile && (
+            <div className="composer-file">
+              <span className="composer-file-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M7 3.75h7l4.25 4.5v12H7z" /><path d="M14 3.75v4.5h4.25M9.5 13h6M9.5 16h6" /></svg>
+              </span>
+              <span className="composer-file-text"><strong>{selectedFile.name}</strong><small>{(selectedFile.size / 1024).toFixed(0)} KB · pronto para enviar</small></span>
+              <button type="button" onClick={() => { setSelectedFile(null); if (fileInputRef.current) fileInputRef.current.value = ''; }} className="composer-remove-file" aria-label="Remover arquivo anexado" title="Remover arquivo">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="m7 7 10 10M17 7 7 17" /></svg>
+              </button>
+            </div>
+          )}
 
-      {/* Input row */}
-      <div className="flex items-end gap-2 max-w-4xl mx-auto border border-[#bfcfca] bg-[#fbfcf8] p-2 shadow-[0_3px_12px_rgba(31,52,50,.04)] focus-within:border-[#588c85]">
-        {/* File upload button */}
-        <button
-          onClick={() => fileInputRef.current?.click()}
-          disabled={isLoading}
-          className="p-2 text-[#71817e] hover:text-[#285f5c] hover:bg-[#e9f0ed] rounded-sm transition-colors disabled:opacity-50"
-          title="Anexar NFSe (imagem ou PDF)"
-        >
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-          </svg>
-        </button>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".png,.jpg,.jpeg,.pdf,image/png,image/jpeg,application/pdf"
-          className="hidden"
-          onChange={handleFileSelect}
-        />
-
-        {/* Text input */}
-        <div className="flex-1 relative">
           <textarea
+            ref={textareaRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Digite os dados da NFSe ou faça uma pergunta..."
+            placeholder="Escreva sua dúvida fiscal ou informe os dados da NFS-e..."
+            aria-label="Mensagem para análise fiscal"
             rows={1}
             disabled={isLoading}
-            className="w-full bg-transparent text-[#273234] placeholder-[#8b9794] px-3 py-2.5 resize-none focus:outline-none disabled:opacity-50"
-            style={{ minHeight: '44px', maxHeight: '120px' }}
+            className="composer-textarea"
+            style={{ minHeight: '48px', maxHeight: '160px' }}
             onInput={(e) => {
               const el = e.currentTarget;
               el.style.height = 'auto';
-              el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+              el.style.height = Math.min(el.scrollHeight, 160) + 'px';
             }}
           />
+
+          <div className="composer-toolbar">
+            <div className="composer-tools">
+              <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isLoading} className="composer-attach" title="Anexar NFSe (PDF, PNG ou JPG)" aria-label="Anexar NFSe">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="m8.5 12.5 6.1-6.1a3.25 3.25 0 0 1 4.6 4.6l-7.4 7.4a5 5 0 0 1-7.1-7.1l7.2-7.2" /></svg>
+                <span>Anexar nota</span>
+              </button>
+              <span className="composer-hint">PDF, PNG ou JPG · até 5 MB</span>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".png,.jpg,.jpeg,.pdf,image/png,image/jpeg,application/pdf"
+                className="hidden"
+                onChange={handleFileSelect}
+              />
+            </div>
+
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={isLoading || (!input.trim() && !selectedFile)}
+              className="composer-send"
+              title="Enviar mensagem"
+              aria-label="Enviar mensagem"
+            >
+              {isLoading ? (
+                <svg className="animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" strokeOpacity=".25" strokeWidth="2.5" /><path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="2.5" /></svg>
+              ) : (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="M12 19V5m-6 6 6-6 6 6" /></svg>
+              )}
+            </button>
+          </div>
         </div>
 
-        {/* Send button */}
-        <button
-          onClick={handleSubmit}
-          disabled={isLoading || (!input.trim() && !selectedFile)}
-          className="min-w-20 px-4 py-2.5 bg-[#397b78] text-white rounded-sm hover:bg-[#2d6865] transition-colors disabled:opacity-45 disabled:cursor-not-allowed"
-          title="Enviar"
-        >
-          {isLoading ? (
-            <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-            </svg>
-          ) : (
-            <span className="text-sm tracking-wide">Enviar</span>
-          )}
-        </button>
       </div>
-
-      {/* Footer disclaimer */}
-      <p className="text-[10px] text-[#899491] text-center mt-3 max-w-4xl mx-auto">
-        As informações geradas são de caráter analítico e não constituem aconselhamento jurídico oficial.
-        Consulte um profissional habilitado para tomada de decisão.
-      </p>
     </div>
   );
 }

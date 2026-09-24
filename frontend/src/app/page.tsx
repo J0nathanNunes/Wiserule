@@ -92,10 +92,17 @@ export default function Home() {
 
   const [isLoading, setIsLoading] = useState(false);
   const [statusMsg, setStatusMsg] = useState('');
+  const [chatSuggestion, setChatSuggestion] = useState<{ text: string; key: number } | null>(null);
   const [revisaoOcr, setRevisaoOcr] = useState<RevisaoOcr | null>(null);
   const [revisaoCampoIndex, setRevisaoCampoIndex] = useState<number | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const suggestionKeyRef = useRef(0);
+
+  const selectChatSuggestion = (text: string) => {
+    suggestionKeyRef.current += 1;
+    setChatSuggestion({ text, key: suggestionKeyRef.current });
+  };
 
   // Rola para o final quando novas mensagens chegam
   useEffect(() => {
@@ -602,30 +609,50 @@ export default function Home() {
         {/* Messages */}
         <div className="chat-scroll flex-1 overflow-y-auto px-4 py-6 space-y-4">
           {messages.map((msg) => msg.id.startsWith('welcome') ? (
-            <section key={msg.id} className="welcome-card max-w-3xl px-7 py-8 sm:px-10 sm:py-10">
-              <div className="relative z-[1]">
-                <div className="welcome-kicker mb-5 flex items-center gap-3 text-[10px] font-semibold uppercase tracking-[.2em]">
-                  <span className="welcome-rule" />
-                  Inteligência fiscal · NFS-e
+            <div key={msg.id} className="welcome-stage">
+              <section className="welcome-card w-full px-6 py-7 sm:px-9 sm:py-8" aria-labelledby="welcome-title">
+                <div className="welcome-content">
+                  <div className="welcome-kicker mb-4 flex items-center gap-3 text-[10px] font-semibold uppercase tracking-[.2em]">
+                    <span className="welcome-rule" />
+                    Análise fiscal de NFS-e
+                  </div>
+                  <h2 id="welcome-title" className="welcome-title max-w-3xl text-3xl sm:text-4xl leading-[1.12]">ISS e retenções, com clareza desde o início.</h2>
+                  <p className="welcome-description mt-3 max-w-2xl text-sm leading-6">Envie uma nota para revisar os dados extraídos ou escolha uma pergunta para começar.</p>
+
+                  <div className="welcome-prompts mt-6" aria-label="Sugestões para começar">
+                    {[
+                      'Quais dados preciso para analisar uma NFS-e?',
+                      'Como funciona a retenção de ISS?',
+                      'O que é conferido na nota fiscal?',
+                    ].map((suggestion) => (
+                      <button
+                        key={suggestion}
+                        type="button"
+                        onClick={() => selectChatSuggestion(suggestion)}
+                        disabled={isLoading}
+                        className="welcome-prompt"
+                      >
+                        {suggestion}
+                        <span aria-hidden="true">↗</span>
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="welcome-steps mt-7 grid gap-3 border-t pt-5 sm:grid-cols-3">
+                    {[
+                      ['01', 'Envie a nota'],
+                      ['02', 'Confira os dados'],
+                      ['03', 'Veja a análise'],
+                    ].map(([numero, titulo]) => (
+                      <div key={numero} className="welcome-feature flex items-center gap-3">
+                        <span className="welcome-step-number">{numero}</span>
+                        <span className="text-xs font-medium">{titulo}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                <h2 className="welcome-title max-w-2xl text-3xl sm:text-[2.65rem] leading-[1.12]">A regra certa começa com uma boa leitura.</h2>
-                <p className="mt-5 max-w-2xl text-[15px] leading-7 text-[#51655d]">{msg.content.split('\n\n').slice(1, 2)[0]}</p>
-                <p className="mt-3 max-w-2xl text-sm leading-6 text-[#697a71]"><strong className="font-semibold text-[#304e45]">Comece por aqui:</strong> {msg.content.split('\n\n').slice(2).join(' ').replace(/^\*\*Comece por aqui:\*\*\s*/, '')}</p>
-                <div className="mt-8 grid max-w-2xl gap-3 border-t border-[#cfdbd0] pt-5 sm:grid-cols-3">
-                  {[
-                    ['01', 'Leia a nota', 'PDF ou imagem'],
-                    ['02', 'Confira os dados', 'Você valida a extração'],
-                    ['03', 'Entenda a regra', 'ISS e retenções'],
-                  ].map(([numero, titulo, apoio]) => (
-                    <div key={numero} className="welcome-feature pt-3">
-                      <span className="block text-[10px] font-semibold tracking-[.12em] text-[#bd9657]">{numero}</span>
-                      <span className="mt-1 block text-xs font-semibold text-[#304e45]">{titulo}</span>
-                      <span className="mt-1 block text-[11px] text-[#7a8980]">{apoio}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </section>
+              </section>
+            </div>
           ) : <ChatMessage key={msg.id} message={msg} />)}
 
           {isLoading && (
@@ -656,6 +683,7 @@ export default function Home() {
         <ChatInput
           onSend={enviarMensagem}
           isLoading={isLoading}
+          suggestion={chatSuggestion}
         />
       </div>
 
