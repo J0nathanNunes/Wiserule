@@ -442,6 +442,17 @@ Sou um assistente especializado em análise de Notas Fiscais de Serviço. Posso 
     return Number.isFinite(Number(normalizado)) && Number(normalizado) > 0;
   };
 
+  // Grau de confiabilidade conforme a quantidade de dados extraídos com sucesso.
+  const nivelConfiabilidade = (revisao: RevisaoOcr): { rotulo: string; cor: string } => {
+    const camposPreenchidos = CAMPOS_REVISAO.filter(({ chave }) => validarRespostaCampo(chave, revisao[chave])).length;
+    const total = CAMPOS_REVISAO.length;
+    const proporcao = camposPreenchidos / total;
+    if (proporcao >= 0.9) return { rotulo: 'Muito alta', cor: 'text-emerald-400' };
+    if (proporcao >= 0.7) return { rotulo: 'Alta', cor: 'text-green-400' };
+    if (proporcao >= 0.4) return { rotulo: 'Média', cor: 'text-amber-400' };
+    return { rotulo: 'Baixa', cor: 'text-red-400' };
+  };
+
   const enviarDatosConferidos = async (revisao: RevisaoOcr) => {
     setIsLoading(true);
     setStatusMsg('Enviando dados conferidos...');
@@ -659,7 +670,7 @@ Envie os dados da NFSe que desejo ajudar.`,
             <h2 id="ocr-review-title" className="text-xl font-semibold text-white">Conferir dados da NFSe</h2>
             <p className="mt-2 text-sm text-amber-300">A leitura automática pode errar. Compare cada campo com o PDF/imagem original; a análise só começa após sua confirmação.</p>
             <a href={revisaoOcr.urlOriginal} target="_blank" rel="noreferrer" className="mt-2 inline-flex text-sm text-blue-300 underline">Abrir arquivo original: {revisaoOcr.arquivo.name}</a>
-            <p className="mt-1 text-xs text-slate-400">Método: {revisaoOcr.metodoOcr}. Concordância dos modelos: {Math.round(revisaoOcr.confiança * 100)}% — indicador auxiliar, não é garantia de acerto. Nenhuma análise começa sem confirmação neste modal.</p>
+            <p className="mt-1 text-xs text-slate-400">Confiabilidade da extração: <span className={`font-semibold ${nivelConfiabilidade(revisaoOcr).cor}`}>{nivelConfiabilidade(revisaoOcr).rotulo}</span></p>
             {revisaoOcr.erros.length > 0 && <p className="mt-2 text-xs text-amber-200">Observações: {revisaoOcr.erros.join('; ')}</p>}
             {revisaoOcr.texto.trim() && <details className="mt-3 rounded-lg border border-slate-700 bg-slate-800/60 p-3">
               <summary className="cursor-pointer text-sm text-blue-200">Ver texto reconhecido pelo OCR</summary>
@@ -680,7 +691,6 @@ Envie os dados da NFSe que desejo ajudar.`,
                     onChange={(event) => setRevisaoOcr((prev) => prev ? { ...prev, [campo]: event.target.value, confirmouConferencia: false } : prev)}
                     className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-white focus:border-blue-500 focus:outline-none"
                   />
-                  {(revisaoOcr.candidatos[campo] || []).length > 0 && <span className="mt-1 flex flex-wrap gap-1">{revisaoOcr.candidatos[campo].map((candidato, indice) => <button key={`${campo}-${indice}`} type="button" onClick={() => setRevisaoOcr((prev) => prev ? { ...prev, [campo]: candidato, confirmouConferencia: false } : prev)} className="rounded bg-slate-700 px-2 py-1 text-left text-xs text-amber-200 hover:bg-slate-600">Sugestão: {candidato}</button>)}</span>}
                 </label>
               ))}
               {revisaoOcr.cidadeUfManual && <p className="sm:col-span-2 text-xs text-slate-400">Município e UF vieram preenchidos manualmente no formulário; confira-os no documento, pois determinam regras tributárias locais.</p>}
