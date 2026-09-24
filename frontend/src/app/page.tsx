@@ -493,8 +493,13 @@ Sou um assistente especializado em análise de Notas Fiscais de Serviço. Posso 
   };
 
   const confirmarRevisaoOcr = async () => {
-    if (!revisaoOcr || !revisaoOcr.confirmouConferencia) return;
-    await enviarDatosConferidos(revisaoOcr);
+    if (!revisaoOcr) return;
+    // Fecha o modal imediatamente antes de iniciar a análise.
+    const revisao = revisaoOcr;
+    URL.revokeObjectURL(revisao.urlOriginal);
+    setRevisaoOcr(null);
+    setRevisaoCampoIndex(null);
+    await enviarDatosConferidos(revisao);
   };
 
   const enviarMensagem = async (texto: string, arquivo?: File | null) => {
@@ -727,12 +732,8 @@ Envie os dados da NFSe que desejo ajudar.`,
               {revisaoOcr.camposPerguntar.length > 0 && <p className="mt-3 text-xs text-amber-200">Campos que a extração marcou para conferência: {revisaoOcr.camposPerguntar.join(', ')}. Compare-os com atenção antes da confirmação.</p>}
             </div>
             <div className="mt-6 flex flex-wrap justify-end gap-3">
-              <button onClick={() => { URL.revokeObjectURL(revisaoOcr.urlOriginal); setRevisaoOcr(null); }} disabled={isLoading} className="rounded-lg border border-slate-600 px-4 py-2 text-slate-200">Cancelar</button>
-              <label className="flex w-full items-start gap-2 text-sm text-slate-200">
-                <input type="checkbox" checked={revisaoOcr.confirmouConferencia} disabled={!CAMPOS_REVISAO.every(({ chave }) => validarRespostaCampo(chave, revisaoOcr[chave]))} onChange={(event) => setRevisaoOcr((prev) => prev ? { ...prev, confirmouConferencia: event.target.checked } : prev)} className="mt-1 accent-emerald-500" />
-                Conferi estes dados diretamente no arquivo original; confirmo que o CNPJ é do prestador e que o valor, serviço e município correspondem à NFSe.
-              </label>
-              <button onClick={confirmarRevisaoOcr} disabled={isLoading || !revisaoOcr.confirmouConferencia} className="rounded-lg bg-emerald-600 px-4 py-2 font-medium text-white disabled:opacity-50">Confirmar e iniciar análise</button>
+              <button onClick={() => { URL.revokeObjectURL(revisaoOcr.urlOriginal); setRevisaoOcr(null); setRevisaoCampoIndex(null); }} disabled={isLoading} className="rounded-lg border border-slate-600 px-4 py-2 text-slate-200">Cancelar</button>
+              <button onClick={confirmarRevisaoOcr} disabled={isLoading} className="rounded-lg bg-emerald-600 px-4 py-2 font-medium text-white disabled:opacity-50">Confirmar e iniciar análise</button>
             </div>
           </section>
         </div>
