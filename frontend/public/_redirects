@@ -1,2 +1,2 @@
 # Redirige /api/* al Worker de Cloudflare (preserva método HTTP)
-/api/*  https://wiserule.nunes-jonathan.workers.dev/api/:splat  307
+/api/*  https://wiserule.nunes-jonathan.workers.dev/api/:splat  200

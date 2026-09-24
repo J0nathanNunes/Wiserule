@@ -128,7 +128,7 @@ export default function Home() {
 
     const poll = async () => {
       try {
-        const res = await fetch(`${API_BASE}/analisar/status/${taskId}`);
+        const res = await fetch(`${API_BASE}/analisar/status/${taskId}`, { credentials: 'include' });
         const data = await res.json();
 
         if (data.status === 'erro' || data.status === 'error' || data.erro || data.error) {
@@ -212,11 +212,15 @@ export default function Home() {
       content,
       timestamp: new Date(),
     };
-    setMessages((prev) => [...prev, newMsg]);
+    setMessages((prev) => [
+      ...(role === 'user' ? prev.filter((message) => !message.id.startsWith('welcome')) : prev),
+      newMsg,
+    ]);
     return newMsg;
   };
 
   const enviarParaAnalise = async (formData: FormData, arquivo?: File | null) => {
+    setMessages((prev) => prev.filter((message) => !message.id.startsWith('welcome')));
     if (arquivo) {
       await solicitarRevisaoOcr(arquivo, '', formData);
       return;
@@ -234,6 +238,7 @@ export default function Home() {
     try {
       const response = await fetch(`${API_BASE}/analisar`, {
         method: 'POST',
+        credentials: 'include',
         body: formPayload,
       });
       const data = await response.json();
@@ -268,7 +273,7 @@ export default function Home() {
     const payload = new FormData();
     payload.append('archivo', arquivo);
     try {
-      const response = await fetch(`${API_BASE}/analisar`, { method: 'POST', body: payload });
+      const response = await fetch(`${API_BASE}/analisar`, { method: 'POST', credentials: 'include', body: payload });
       const data = await response.json();
       const t1 = Date.now();
       addMessage('assistant', `⏳ **Extraendo informações...** · ${((t1 - t0) / 1000).toFixed(1)}s`);
@@ -469,7 +474,7 @@ export default function Home() {
     if (revisao.texto.trim()) payload.append('mensaje', revisao.texto.trim());
     payload.append('confirmar_dados', 'true');
     try {
-      const response = await fetch(`${API_BASE}/analisar`, { method: 'POST', body: payload });
+      const response = await fetch(`${API_BASE}/analisar`, { method: 'POST', credentials: 'include', body: payload });
       const data = await response.json();
       if (!response.ok || data.status !== 'procesando' || !data.dados_extraidos?.task_id) {
         throw new Error(data.error || `HTTP ${response.status}`);
@@ -544,6 +549,7 @@ export default function Home() {
     try {
       const response = await fetch(`${API_BASE}/chat`, {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ mensagens: historico }),
       });

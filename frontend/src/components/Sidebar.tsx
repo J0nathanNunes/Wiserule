@@ -245,7 +245,7 @@ export default function Sidebar({ onSubmit, isLoading, onNovaAnalise }: SidebarP
             setStatusLoading(true);
             setStatusApis(null);
             try {
-              const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || ''}/api/diagnostico`);
+              const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || ''}/api/diagnostico`, { credentials: 'include' });
               const data = await res.json();
               setStatusApis(data);
             } catch (err) {

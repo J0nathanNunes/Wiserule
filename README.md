@@ -61,6 +61,30 @@ MinhaReceita  LegisWeb   Tavily/Brave
 
 ## 🛠️ Instalação e Execução
 
+### Login e gerenciamento de acessos (Cloudflare Worker + D1)
+
+1. Aplique a migração de usuários no banco D1 de produção:
+
+  ```bash
+  cd worker
+  npm run db:migrate:auth:remote
+  ```
+
+2. Configure um segredo temporário e exclusivo para provisionar o primeiro administrador:
+
+  ```bash
+  npx wrangler secret put AUTH_BOOTSTRAP_SECRET
+  ```
+
+3. Publique o Worker e abra o Wiserule. Na tela de login, use **Configurar primeira conta administrativa**. Informe o segredo, nome, e-mail e uma senha com pelo menos 12 caracteres. A inicialização só funciona quando ainda não há administrador.
+4. Após criar a conta inicial, remova o segredo de provisionamento:
+
+  ```bash
+  npx wrangler secret delete AUTH_BOOTSTRAP_SECRET
+  ```
+
+Novos cadastros entram como **pendentes** e não recebem sessão. Um administrador aprova ou recusa cada solicitação em **Gerenciar usuários** e pode conceder/remover o papel administrativo. As sessões usam cookies `HttpOnly`, `Secure` e `SameSite=None`; as senhas são armazenadas com PBKDF2-SHA-256 e sal aleatório. O proxy de `/api/*` no Cloudflare Pages mantém o navegador no mesmo domínio da aplicação, necessário para que o cookie de sessão funcione sem depender de cookies de terceiros. Para desenvolvimento local, configure `NEXT_PUBLIC_API_URL` apontando para o Worker, habilite `http://localhost:3000` em `CORS_ORIGINS`, configure `AUTH_BOOTSTRAP_SECRET` como segredo local do Wrangler e aplique a migração ao banco local.
+
 ### 1. Clone o repositório
 
 ```bash

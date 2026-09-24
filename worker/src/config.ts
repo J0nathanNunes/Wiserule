@@ -14,6 +14,7 @@ export interface Env {
   GERANET_API_KEY?: string;
   GERANET_CERT_PASSWORD?: string;
   GERANET_CERTS_JSON?: string;
+  AUTH_BOOTSTRAP_SECRET?: string;
 
   // Vars (configurados en wrangler.toml)
   APP_NAME?: string;

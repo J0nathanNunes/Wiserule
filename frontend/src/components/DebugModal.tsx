@@ -27,7 +27,7 @@ export default function DebugModal({ isOpen, onClose, embedded = false }: { isOp
     // ===== 1. TEST /api/health =====
     try {
       const t0 = Date.now();
-      const res = await fetch(`${API_BASE}/health`);
+      const res = await fetch(`${API_BASE}/health`, { credentials: 'include' });
       const ms = Date.now() - t0;
       const texto = await res.text();
       let data: unknown = null;
@@ -45,7 +45,7 @@ export default function DebugModal({ isOpen, onClose, embedded = false }: { isOp
     // ===== 2. TEST /api/diagnostico =====
     try {
       const t0 = Date.now();
-      const res = await fetch(`${API_BASE}/diagnostico`);
+      const res = await fetch(`${API_BASE}/diagnostico`, { credentials: 'include' });
       const ms = Date.now() - t0;
       const texto = await res.text();
       let data: unknown = null;
@@ -70,7 +70,7 @@ export default function DebugModal({ isOpen, onClose, embedded = false }: { isOp
       form.append('valor', '1000');
       form.append('cidade', 'Campo Grande');
       form.append('uf', 'MS');
-      const res = await fetch(`${API_BASE}/analisar`, { method: 'POST', body: form });
+      const res = await fetch(`${API_BASE}/analisar`, { method: 'POST', credentials: 'include', body: form });
       const ms = Date.now() - t0;
       const texto = await res.text();
       let data: unknown = null;
@@ -92,7 +92,7 @@ export default function DebugModal({ isOpen, onClose, embedded = false }: { isOp
       for (let i = 0; i < 30; i++) {
         await new Promise((r) => setTimeout(r, 2000));
         try {
-          const sres = await fetch(`${API_BASE}/analisar/status/${taskId}`);
+          const sres = await fetch(`${API_BASE}/analisar/status/${taskId}`, { credentials: 'include' });
           const stexto = await sres.text();
           let sdata: unknown = null;
           try { sdata = JSON.parse(stexto); } catch { /* não é JSON */ }

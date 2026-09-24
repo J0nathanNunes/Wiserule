@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import './globals.css';
+import AuthShell from '@/components/AuthShell';
 
 export const metadata: Metadata = {
   title: 'Wiserule - Análise Fiscal Inteligente',
@@ -13,7 +14,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="pt-BR">
-      <body>{children}</body>
+      <body><AuthShell>{children}</AuthShell></body>
     </html>
   );
 }

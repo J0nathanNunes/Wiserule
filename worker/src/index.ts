@@ -16,6 +16,21 @@ import { salvarAnalise, listarAnalises, buscarAnalisePorId } from './db';
 import { consultarNotas } from './geranet';
 import { TareaAnalisis, generarTaskId } from './tarefas';
 import { validarCnpj, validarUf } from './validacoes';
+import {
+  buscarUsuarioDaSessao,
+  compararSegredo,
+  criarCredencialSenha,
+  criarSessao,
+  DURACAO_SESSAO_SEGUNDOS,
+  hashToken,
+  invalidarSessao,
+  NOME_COOKIE_SESSAO,
+  UsuarioAutenticado,
+  validarEmail,
+  validarSenha,
+  verificarSenha,
+} from './auth';
+import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 
 export { TareaAnalisis };
 
@@ -81,7 +96,7 @@ function arquivoCorrespondeExtensao(bytes: Uint8Array, extensao: string): boolea
 }
 
 
-const app = new Hono<{ Bindings: Env }>();
+const app = new Hono<{ Bindings: Env; Variables: { usuario: UsuarioAutenticado } }>();
 
 // CORS
 app.use(
@@ -92,10 +107,235 @@ app.use(
       if (config.corsOrigins.includes(origin)) return origin;
       return config.corsOrigins[0];
     },
-    allowMethods: ['GET', 'POST', 'OPTIONS'],
+    allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowHeaders: ['Content-Type', 'Authorization'],
+    credentials: true,
   })
 );
+
+const opcoesCookieSessao = {
+  httpOnly: true as const,
+  secure: true,
+  sameSite: 'None' as const,
+  path: '/',
+  maxAge: DURACAO_SESSAO_SEGUNDOS,
+};
+
+function idNovoUsuario(): string {
+  return crypto.randomUUID();
+}
+
+// Apenas autenticação, saúde e inicialização controlada são públicas.
+app.use('/api/*', async (c, next) => {
+  const caminho = new URL(c.req.url).pathname;
+  const metodo = c.req.method.toUpperCase();
+  const origem = c.req.header('Origin');
+  if (
+    caminho.startsWith('/api/auth/') &&
+    ['POST', 'PUT', 'PATCH', 'DELETE'].includes(metodo) &&
+    (!origem || !getConfig(c.env).corsOrigins.includes(origem))
+  ) {
+    return c.json({ status: 'error', error: 'Origem da solicitação não autorizada.' }, 403);
+  }
+  if (
+    caminho.startsWith('/api/auth/') ||
+    caminho === '/api/health' ||
+    caminho === '/api/health/detalhado'
+  ) return next();
+
+  if (!c.env.DB) return c.json({ status: 'error', error: 'O banco de dados não está configurado.' }, 503);
+
+  const token = getCookie(c, NOME_COOKIE_SESSAO);
+  const usuario = token ? await buscarUsuarioDaSessao(c.env.DB, token) : null;
+  if (!usuario) {
+    if (token) deleteCookie(c, NOME_COOKIE_SESSAO, { path: '/', secure: true, sameSite: 'None' });
+    return c.json({ status: 'error', error: 'Sua sessão expirou. Entre novamente.' }, 401);
+  }
+
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(metodo)) {
+    if (!origem || !getConfig(c.env).corsOrigins.includes(origem)) {
+      return c.json({ status: 'error', error: 'Origem da solicitação não autorizada.' }, 403);
+    }
+  }
+
+  c.set('usuario', usuario);
+  return next();
+});
+
+app.post('/api/auth/bootstrap', async (c) => {
+  if (!c.env.DB) return c.json({ status: 'error', error: 'O banco de dados não está configurado.' }, 503);
+  if (!c.env.AUTH_BOOTSTRAP_SECRET) return c.json({ status: 'error', error: 'A inicialização administrativa não está habilitada.' }, 503);
+
+  const body = await c.req.json<{ nome?: string; email?: string; senha?: string; segredo?: string }>().catch(() => null);
+  const ip = c.req.header('CF-Connecting-IP') || 'desconhecido';
+  const tentativasBootstrap = await c.env.DB.prepare(
+    `SELECT COUNT(*) AS total FROM tentativas_login
+     WHERE email = ? AND tentada_em > datetime('now', '-15 minutes')`,
+  ).bind(`bootstrap:${ip}`).first<{ total: number }>();
+  if ((tentativasBootstrap?.total || 0) >= 5) {
+    return c.json({ status: 'error', error: 'Limite de tentativas atingido. Aguarde 15 minutos.' }, 429);
+  }
+  await c.env.DB.prepare('INSERT INTO tentativas_login (email, ip) VALUES (?, ?)').bind(`bootstrap:${ip}`, ip).run();
+  const nome = body?.nome?.trim() || '';
+  const email = body?.email?.trim().toLowerCase() || '';
+  const senha = body?.senha || '';
+  if (!body || !compararSegredo(body.segredo || '', c.env.AUTH_BOOTSTRAP_SECRET)) {
+    return c.json({ status: 'error', error: 'Não foi possível validar a inicialização.' }, 403);
+  }
+  if (nome.length < 2 || nome.length > 100 || !validarEmail(email) || !validarSenha(senha)) {
+    return c.json({ status: 'error', error: 'Informe nome, e-mail válido e senha com pelo menos 12 caracteres.' }, 400);
+  }
+
+  const admins = await c.env.DB.prepare("SELECT COUNT(*) AS total FROM usuarios WHERE papel = 'admin'").first<{ total: number }>();
+  if ((admins?.total || 0) > 0) return c.json({ status: 'error', error: 'A conta administrativa inicial já foi criada.' }, 409);
+
+  const credencial = await criarCredencialSenha(senha);
+  const id = idNovoUsuario();
+  try {
+    const resultado = await c.env.DB.prepare(
+      `INSERT INTO usuarios (id, nome, email, senha_hash, senha_salt, papel, status)
+       SELECT ?, ?, ?, ?, ?, 'admin', 'ativo'
+       WHERE NOT EXISTS (SELECT 1 FROM usuarios WHERE papel = 'admin')`,
+    ).bind(id, nome, email, credencial.hash, credencial.salt).run();
+    if (!resultado.meta.changes) return c.json({ status: 'error', error: 'A conta administrativa inicial já foi criada.' }, 409);
+  } catch {
+    return c.json({ status: 'error', error: 'Não foi possível criar a conta. Confira se o e-mail já está cadastrado.' }, 409);
+  }
+
+  const token = await criarSessao(c.env.DB, id);
+  setCookie(c, NOME_COOKIE_SESSAO, token, opcoesCookieSessao);
+  return c.json({ status: 'sucesso', usuario: { id, nome, email, papel: 'admin', status: 'ativo' } }, 201);
+});
+
+app.get('/api/auth/configuracao', async (c) => {
+  if (!c.env.DB) return c.json({ status: 'error', error: 'O banco de dados não está configurado.' }, 503);
+  const admin = await c.env.DB.prepare("SELECT 1 AS configurado FROM usuarios WHERE papel = 'admin' LIMIT 1").first();
+  return c.json({ status: 'sucesso', inicializacaoDisponivel: !admin && Boolean(c.env.AUTH_BOOTSTRAP_SECRET) });
+});
+
+app.post('/api/auth/cadastro', async (c) => {
+  if (!c.env.DB) return c.json({ status: 'error', error: 'O banco de dados não está configurado.' }, 503);
+  const body = await c.req.json<{ nome?: string; email?: string; senha?: string }>().catch(() => null);
+  const nome = body?.nome?.trim() || '';
+  const email = body?.email?.trim().toLowerCase() || '';
+  const senha = body?.senha || '';
+  if (!body || nome.length < 2 || nome.length > 100 || !validarEmail(email) || !validarSenha(senha)) {
+    return c.json({ status: 'error', error: 'Informe nome, e-mail válido e senha com pelo menos 12 caracteres.' }, 400);
+  }
+  const ip = c.req.header('CF-Connecting-IP') || 'desconhecido';
+  const cadastrosRecentes = await c.env.DB.prepare(
+    `SELECT COUNT(*) AS total FROM tentativas_login
+     WHERE email = ? AND tentada_em > datetime('now', '-1 hour')`,
+  ).bind(`cadastro:${ip}`).first<{ total: number }>();
+  if ((cadastrosRecentes?.total || 0) >= 5) {
+    return c.json({ status: 'error', error: 'Limite de cadastros atingido. Tente novamente em uma hora.' }, 429);
+  }
+  await c.env.DB.prepare('INSERT INTO tentativas_login (email, ip) VALUES (?, ?)').bind(`cadastro:${ip}`, ip).run();
+  await c.env.DB.prepare("DELETE FROM tentativas_login WHERE tentada_em < datetime('now', '-1 day')").run();
+  const credencial = await criarCredencialSenha(senha);
+  try {
+    await c.env.DB.prepare(
+      `INSERT INTO usuarios (id, nome, email, senha_hash, senha_salt, papel, status)
+       VALUES (?, ?, ?, ?, ?, 'usuario', 'pendente')`,
+    ).bind(idNovoUsuario(), nome, email, credencial.hash, credencial.salt).run();
+  } catch {
+    return c.json({ status: 'error', error: 'Já existe um cadastro com este e-mail.' }, 409);
+  }
+  return c.json({ status: 'pendente', mensagem: 'Cadastro recebido. O acesso será liberado após aprovação por um administrador.' }, 201);
+});
+
+app.post('/api/auth/login', async (c) => {
+  if (!c.env.DB) return c.json({ status: 'error', error: 'O banco de dados não está configurado.' }, 503);
+  const body = await c.req.json<{ email?: string; senha?: string }>().catch(() => null);
+  const email = body?.email?.trim().toLowerCase() || '';
+  const senha = body?.senha || '';
+  if (!email || !senha || email.length > 254 || senha.length > 128) {
+    return c.json({ status: 'error', error: 'Informe e-mail e senha.' }, 400);
+  }
+  const ip = c.req.header('CF-Connecting-IP') || 'desconhecido';
+  const tentativas = await c.env.DB.prepare(
+    `SELECT COUNT(*) AS total FROM tentativas_login
+     WHERE email = ? COLLATE NOCASE AND ip = ? AND tentada_em > datetime('now', '-15 minutes')`,
+  ).bind(email, ip).first<{ total: number }>();
+  if ((tentativas?.total || 0) >= 10) {
+    return c.json({ status: 'error', error: 'Muitas tentativas. Aguarde 15 minutos e tente novamente.' }, 429);
+  }
+  await c.env.DB.prepare('INSERT INTO tentativas_login (email, ip) VALUES (?, ?)').bind(email, ip).run();
+  await c.env.DB.prepare("DELETE FROM tentativas_login WHERE tentada_em < datetime('now', '-1 day')").run();
+  const usuario = await c.env.DB.prepare(
+    'SELECT id, nome, email, senha_hash, senha_salt, papel, status FROM usuarios WHERE email = ? COLLATE NOCASE',
+  ).bind(email).first<{ id: string; nome: string; email: string; senha_hash: string; senha_salt: string; papel: 'admin' | 'usuario'; status: 'pendente' | 'ativo' | 'recusado' }>();
+  if (!usuario || !(await verificarSenha(senha, usuario.senha_hash, usuario.senha_salt))) {
+    return c.json({ status: 'error', error: 'E-mail ou senha incorretos.' }, 401);
+  }
+  if (usuario.status !== 'ativo') {
+    const mensagem = usuario.status === 'pendente'
+      ? 'Seu cadastro ainda aguarda aprovação de um administrador.'
+      : 'Este cadastro não foi aprovado. Entre em contato com um administrador.';
+    return c.json({ status: 'pendente', error: mensagem }, 403);
+  }
+  await c.env.DB.prepare('DELETE FROM tentativas_login WHERE email = ? COLLATE NOCASE AND ip = ?').bind(email, ip).run();
+  const tokenAnterior = getCookie(c, NOME_COOKIE_SESSAO);
+  if (tokenAnterior) await invalidarSessao(c.env.DB, tokenAnterior);
+  const token = await criarSessao(c.env.DB, usuario.id);
+  setCookie(c, NOME_COOKIE_SESSAO, token, opcoesCookieSessao);
+  return c.json({ status: 'sucesso', usuario: { id: usuario.id, nome: usuario.nome, email: usuario.email, papel: usuario.papel, status: 'ativo' } });
+});
+
+app.get('/api/auth/sessao', async (c) => {
+  if (!c.env.DB) return c.json({ status: 'error', usuario: null }, 503);
+  const token = getCookie(c, NOME_COOKIE_SESSAO);
+  const usuario = token ? await buscarUsuarioDaSessao(c.env.DB, token) : null;
+  return c.json({ status: 'sucesso', usuario });
+});
+
+app.post('/api/auth/sair', async (c) => {
+  if (c.env.DB) {
+    const token = getCookie(c, NOME_COOKIE_SESSAO);
+    if (token) await invalidarSessao(c.env.DB, token);
+  }
+  deleteCookie(c, NOME_COOKIE_SESSAO, { path: '/', secure: true, sameSite: 'None' });
+  return c.json({ status: 'sucesso' });
+});
+
+app.get('/api/usuarios', async (c) => {
+  if (c.get('usuario').papel !== 'admin') return c.json({ status: 'error', error: 'Apenas administradores podem gerenciar usuários.' }, 403);
+  const usuarios = await c.env.DB.prepare(
+    `SELECT id, nome, email, papel, status, criado_em, atualizado_em
+     FROM usuarios ORDER BY CASE status WHEN 'pendente' THEN 0 WHEN 'ativo' THEN 1 ELSE 2 END, criado_em DESC`,
+  ).all();
+  return c.json({ status: 'sucesso', usuarios: usuarios.results || [] });
+});
+
+app.patch('/api/usuarios/:id', async (c) => {
+  const administrador = c.get('usuario');
+  if (administrador.papel !== 'admin') return c.json({ status: 'error', error: 'Apenas administradores podem gerenciar usuários.' }, 403);
+  const id = c.req.param('id');
+  const body = await c.req.json<{ status?: string; papel?: string }>().catch(() => null);
+  if (!body || !['ativo', 'recusado'].includes(body.status || '') || !['usuario', 'admin'].includes(body.papel || 'usuario')) {
+    return c.json({ status: 'error', error: 'Ação de gerenciamento inválida.' }, 400);
+  }
+  if (id === administrador.id && (body.status !== 'ativo' || body.papel === 'usuario')) {
+    return c.json({ status: 'error', error: 'Não é possível remover o próprio acesso administrativo.' }, 400);
+  }
+  const atual = await c.env.DB.prepare('SELECT papel, status FROM usuarios WHERE id = ?').bind(id).first<{ papel: string; status: string }>();
+  if (atual?.papel === 'admin' && atual.status === 'ativo' && (body.status !== 'ativo' || body.papel !== 'admin')) {
+    const outrosAdmins = await c.env.DB.prepare(
+      "SELECT COUNT(*) AS total FROM usuarios WHERE papel = 'admin' AND status = 'ativo' AND id <> ?",
+    ).bind(id).first<{ total: number }>();
+    if ((outrosAdmins?.total || 0) === 0) {
+      return c.json({ status: 'error', error: 'Mantenha pelo menos um administrador ativo no sistema.' }, 400);
+    }
+  }
+  const resultado = await c.env.DB.prepare(
+    `UPDATE usuarios SET status = ?, papel = ?, atualizado_em = datetime('now') WHERE id = ?`,
+  ).bind(body.status, body.papel, id).run();
+  if (!resultado.meta.changes) return c.json({ status: 'error', error: 'Usuário não encontrado.' }, 404);
+  if (body.status !== 'ativo') {
+    await c.env.DB.prepare('DELETE FROM sessoes_usuario WHERE usuario_id = ?').bind(id).run();
+  }
+  return c.json({ status: 'sucesso' });
+});
 
 // Health check
 app.get('/api/health', (c) => {
