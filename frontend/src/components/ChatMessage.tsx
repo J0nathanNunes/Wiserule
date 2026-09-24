@@ -14,30 +14,29 @@ type MessageProps = {
 
 export default function ChatMessage({ message }: MessageProps) {
   const isUser = message.role === 'user';
+  const isReport = !isUser && /^#\s*Relatório|^##\s*📋/.test(message.content.trim());
 
   return (
-    <div className={`flex w-full ${isUser ? 'justify-end' : 'justify-start'}`}>
-      <div className={`max-w-[min(82%,48rem)] border px-5 py-3.5 shadow-[0_2px_8px_rgba(31,52,50,0.035)] max-sm:max-w-[94%] ${isUser ? 'chat-bubble-user rounded-[3px_3px_0_3px] border-white bg-white text-[#273234]' : 'chat-bubble-assistant rounded-[3px_3px_3px_0] border-[#d6e4df] bg-[#e3eeea] text-[#293736]'}`}>
-        <div className={`mb-2 text-[10px] font-semibold uppercase tracking-[.14em] ${isUser ? 'text-[#8a9694] text-right' : 'text-[#4b7771]'}`}>
-          {isUser ? 'Você' : 'Wiserule · análise fiscal'}
+    <div className={`chat-row ${isUser ? 'chat-row-user' : 'chat-row-assistant'}`}>
+      {!isUser && (
+        <div className="chat-avatar" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 6h16M4 6v4h16M4 10v4h16M4 14v4h16" /></svg>
+        </div>
+      )}
+      <div className={`chat-bubble ${isUser ? 'chat-bubble-user' : 'chat-bubble-assistant'} ${isReport ? 'chat-report' : ''}`}>
+        <div className={`chat-bubble-head ${isUser ? 'chat-bubble-head-user' : 'chat-bubble-head-assistant'}`}>
+          <span>{isUser ? 'Você' : 'Wiserule'}</span>
+          <span className="chat-bubble-time">{message.timestamp.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
         </div>
         {isUser ? (
-          <p className="whitespace-pre-wrap text-sm leading-relaxed">{message.content}</p>
+          <p className="chat-bubble-text">{message.content}</p>
         ) : (
-          <div className="markdown-body text-sm leading-relaxed">
+          <div className={`markdown-body ${isReport ? 'report-body' : 'chat-bubble-text'}`}>
             <ReactMarkdown remarkPlugins={[remarkGfm]}>
               {message.content}
             </ReactMarkdown>
           </div>
         )}
-
-        {/* Timestamp */}
-        <div className={`mt-2 text-[10px] tabular-nums ${isUser ? 'text-[#9aa4a2] text-right' : 'text-[#758582]'}`}>
-          {message.timestamp.toLocaleTimeString('pt-BR', {
-            hour: '2-digit',
-            minute: '2-digit',
-          })}
-        </div>
       </div>
     </div>
   );
