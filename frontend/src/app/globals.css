@@ -77,7 +77,6 @@ button { cursor: pointer; }
   margin: 1.5rem 0;
 }
 
-.chat-scroll { background: radial-gradient(ellipse at 85% 8%, rgba(166, 204, 195, .2), transparent 42%), var(--paper); }
 .chat-topbar { background: rgba(251,252,248,.88); border-color: var(--line); }
 .chat-composer { background: rgba(243,244,239,.94); border-color: var(--line); }
 .wiserule-sidebar { background: #090e18; border-color: #202836; color: #eff1f4; }
@@ -133,7 +132,6 @@ button { cursor: pointer; }
 .chat-topbar > span { color: #969eaa; border-color: #303a49; }
 .chat-topbar button[title="Abrir debug"] { color: #aeb4bd; border-color: #303a49; }
 .chat-topbar button[title="Abrir debug"]:hover { background: #151e2b; color: #d4a45c; }
-.chat-scroll { background: radial-gradient(ellipse at 84% 5%, rgba(118,91,50,.11), transparent 36%), #080d17; }
 .chat-scroll {
   position: relative;
   isolation: isolate;
@@ -144,23 +142,21 @@ button { cursor: pointer; }
 .chat-scroll::after {
   content: '';
   position: absolute;
-  inset: -18%;
+  inset: 0;
   z-index: 0;
   pointer-events: none;
 }
-.chat-scroll::before { inset: -18% 0; }
-.chat-scroll::after { inset: 0; }
 .chat-scroll::before {
   background:
-    radial-gradient(ellipse at 17% 24%, rgba(39,75,97,.21), transparent 34%),
-    radial-gradient(ellipse at 82% 17%, rgba(153,111,48,.14), transparent 31%),
-    radial-gradient(ellipse at 62% 82%, rgba(32,72,74,.17), transparent 38%);
-  background-size: 130% 130%;
+    radial-gradient(ellipse at 18% 24%, rgba(39,75,97,.23), transparent 38%),
+    radial-gradient(ellipse at 82% 18%, rgba(153,111,48,.17), transparent 36%),
+    radial-gradient(ellipse at 62% 82%, rgba(32,72,74,.18), transparent 42%);
+  background-size: 155% 155%, 145% 145%, 160% 160%;
+  background-position: 0% 0%, 100% 0%, 50% 100%;
   animation: wiserule-ambient-drift 32s ease-in-out infinite alternate;
 }
 .chat-scroll::after {
-  inset: 0;
-  opacity: .11;
+  opacity: .075;
   background-image:
     linear-gradient(rgba(189,150,87,.18) 1px, transparent 1px),
     linear-gradient(90deg, rgba(189,150,87,.18) 1px, transparent 1px);
@@ -170,13 +166,13 @@ button { cursor: pointer; }
 }
 .chat-scroll > * { position: relative; z-index: 1; }
 @keyframes wiserule-ambient-drift {
-  0% { transform: translate3d(-1.2%, -1%, 0) scale(1); }
-  50% { transform: translate3d(1.2%, .8%, 0) scale(1.035); }
-  100% { transform: translate3d(-.5%, 1.4%, 0) scale(1.015); }
+  0% { background-position: 0% 0%, 100% 0%, 50% 100%; }
+  50% { background-position: 18% 12%, 82% 22%, 60% 78%; }
+  100% { background-position: 8% 24%, 100% 8%, 42% 100%; }
 }
 @keyframes wiserule-grid-breathe {
-  0% { opacity: .055; transform: translateY(-8px); }
-  100% { opacity: .13; transform: translateY(8px); }
+  0% { opacity: .045; background-position: 0 0; }
+  100% { opacity: .09; background-position: 36px 36px; }
 }
 .chat-composer { background: rgba(8,13,23,.96); border-color: #202836; }
 .chat-composer > div { border-radius: 3px; border-color: #303a49; background: #101722; }
