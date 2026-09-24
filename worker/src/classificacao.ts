@@ -32,7 +32,9 @@ const ARTIGO_3_EXCECOES: Record<string, { local: string; regla: string }> = {
   '07.02': { local: 'local_ejecucion', regla: 'Execução de obras de construção civil - ISS devido no local da obra' },
   '07.03': { local: 'local_ejecucion', regla: 'Acabamentos - ISS devido no local da obra' },
   '07.04': { local: 'local_ejecucion', regla: 'Serviços auxiliares da construção - ISS devido no local da obra' },
-  '07.05': { local: 'local_ejecucion', regla: 'Projetos de arquitetura e engenharia - ISS devido no local da obra' },
+  '07.05': { local: 'local_ejecucion', regla: 'Reparação, conservação e reforma de edifícios, estradas, pontes, portos e congêneres - ISS devido no local da execução, conforme art. 3º, V, da LC 116/2003' },
+  '07.10': { local: 'local_ejecucion', regla: 'Limpeza, manutenção e conservação de vias, imóveis, parques e jardins - ISS devido no local da execução, conforme art. 3º, VII, da LC 116/2003' },
+  '13.05': { local: 'establecimiento_prestador', regla: 'Composição gráfica, inclusive confecção de impressos gráficos, exceto os destinados a posterior operação de comercialização ou industrialização - regra geral do art. 3º da LC 116/2003' },
   '07.16': { local: 'local_ejecucion', regla: 'Instalações - ISS devido no local de execução' },
   '07.17': { local: 'local_ejecucion', regla: 'Montagem industrial - ISS devido no local de execução' },
   '10.01': { local: 'local_ejecucion', regla: 'Serviços de transporte - ISS devido no local da prestação' },
@@ -152,12 +154,13 @@ export interface CotaPatronal {
 }
 
 export function clasificarLocalIss(lc116Codigo: string): LocalIss {
-  const excepcion = ARTIGO_3_EXCECOES[lc116Codigo];
+  const codigoNormalizado = lc116Codigo.replace(/^(\d)\.(\d{2})$/, '0$1.$2');
+  const excepcion = ARTIGO_3_EXCECOES[codigoNormalizado];
   if (excepcion) {
     return {
       local_pago: excepcion.local,
       regla_descripcion: excepcion.regla,
-      exige_obra_art: ['7.02', '7.03', '7.04', '7.05'].includes(lc116Codigo),
+      exige_obra_art: ['07.02', '07.03', '07.04', '07.05'].includes(codigoNormalizado),
     };
   }
   return {
@@ -287,6 +290,7 @@ export function formatearClasificacionParaLlm(params: {
     '## Classificação Fiscal Detalhada',
     '',
     '### Local de Pagamento do ISS (Art. 3º LC 116/2003)',
+    ...(params.lc116Codigo ? [] : ['Item da LC 116 não identificado com segurança; regra de local de incidência pendente de validação manual.', '']),
     `Regra: ${localIss.regla_descripcion}`,
     `Local de pagamento: ${localIss.local_pago}`,
     `Exige ART/CREA: ${localIss.exige_obra_art ? 'Sim' : 'Não'}`,
@@ -304,7 +308,7 @@ export function formatearClasificacionParaLlm(params: {
 
   partes.push('### Retenções Federais (IN RFB 2.100/2022)');
   if (params.simplesNacional) {
-    partes.push('Empresa optante do Simples Nacional → Não há retenção de tributos federais.');
+    partes.push('Empresa optante do Simples Nacional → avaliar as dispensas de retenção conforme regime, natureza do serviço e legislação aplicável; não presumir dispensa universal para todos os tributos.');
     partes.push('Base legal: LC 123/2006, art. 13');
   } else {
     partes.push('Empresa NÃO optante do Simples Nacional → Sujeita a retenções:');

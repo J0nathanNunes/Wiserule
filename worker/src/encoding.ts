@@ -65,7 +65,7 @@ export function repararMojibake(texto: string): string {
     for (let i = 0; i < texto.length; i++) {
       bytes[i] = texto.charCodeAt(i) & 0xff;
     }
-    const decoder = new TextDecoder('utf-8', { fatal: false });
+    const decoder = new TextDecoder('utf-8', { fatal: false, ignoreBOM: true });
     const reparado = decoder.decode(bytes);
     // Solo usa el resultado si no tiene caracteres de reemplazo
     if (!reparado.includes('\uFFFD')) {

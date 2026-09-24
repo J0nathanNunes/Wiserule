@@ -1,9 +1,10 @@
 /**
- * Configuración central del Worker Wiserule.
- * Equivalente a backend/config.py en Python.
+ * Configuração central do Worker Wiserule.
+ * Equivalente a backend/config.py em Python.
  */
 
 export interface Env {
+  TAREA_ANALISIS: DurableObjectNamespace;
   // D1 Database
   DB: D1Database;
 

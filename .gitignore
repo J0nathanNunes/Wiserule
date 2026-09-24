@@ -16,3 +16,11 @@ worker/node_modules/
 worker/dist/
 worker/.wrangler/
 .wrangler/
+worker/.dev.vars
+
+# Artefatos de build
+*.tsbuildinfo
+
+# Documentos de teste (NFSe de exemplo)
+*.pdf
+imagem NFSe.png

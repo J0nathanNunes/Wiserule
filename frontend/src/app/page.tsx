@@ -31,13 +31,23 @@ type RevisaoOcr = {
   cnpj: string;
   servico: string;
   servico_descricao: string;
+  cnpj_tomador: string;
+  codigo_servico_nfse: string;
+  item_lista_lc116: string;
   valor: string;
+  valor_liquido: string;
+  iss_retencao: string;
+  numero_nfse: string;
+  data_emissao: string;
+  simples_nacional_nfse: string;
+  mei_nfse: boolean;
   cidade: string;
   uf: string;
   candidatos: Record<string, string[]>;
   divergencias: string[];
   confiança: number;
   erros: string[];
+  metodoOcr: string;
 };
 
 const CAMPOS_REVISAO: Array<{ chave: 'cnpj' | 'servico' | 'valor' | 'cidade' | 'uf'; rotulo: string }> = [
@@ -48,10 +58,10 @@ const CAMPOS_REVISAO: Array<{ chave: 'cnpj' | 'servico' | 'valor' | 'cidade' | '
   { chave: 'uf', rotulo: 'UF do município da prestação' },
 ];
 
-// Decodifica o relatório de Base64 (o backend o codifica para protegerlo do Durable Object)
+// Decodifica o relatório de Base64 (o backend o codifica para protegê-lo do Durable Object)
 function decodificarRelatorio(texto: string): string {
   if (!texto) return texto;
-  // Se não parece Base64 (contiene caracteres não-Base64), devuelve o texto original
+  // Se não parece Base64 (contem caracteres não-Base64), devolva o texto original
   if (!/^[A-Za-z0-9+/=\s]+$/.test(texto)) return texto;
   try {
     const binario = atob(texto);
@@ -104,7 +114,7 @@ Sou um assistente especializado em análise de Notas Fiscais de Serviço. Posso 
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // En produção usa a URL do Worker; en dev usa o proxy local
+  // Em produção usa a URL do Worker; em dev usa o proxy local
   const API_BASE = process.env.NEXT_PUBLIC_API_URL
     ? `${process.env.NEXT_PUBLIC_API_URL}/api`
     : '/api';
@@ -154,7 +164,7 @@ Sou um assistente especializado em análise de Notas Fiscais de Serviço. Posso 
         }
 
         if (data.status === 'concluido' && data.relatorio_completo) {
-          // Decodifica Base64 (o backend codifica o relatório para protegerlo do Durable Object)
+          // Decodifica Base64 (o backend codifica o relatório para protegê-lo do Durable Object)
           const relatorio = decodificarRelatorio(data.relatorio_completo);
           const tempoTotal = inicioEm ? formatearTempo(Date.now() - inicioEm) : '';
           setMessages((prev) =>
@@ -286,20 +296,30 @@ Sou um assistente especializado em análise de Notas Fiscais de Serviço. Posso 
     const dadosRevisao = {
       arquivo,
       urlOriginal: URL.createObjectURL(arquivo),
-      texto,
+      texto: String(data.texto_ocr || texto || ''),
       confirmouConferencia: false,
       cidadeUfManual: Boolean(dadosIniciais?.cidade || dadosIniciais?.uf),
       camposPerguntar: [] as RevisaoOcr['camposPerguntar'],
       cnpj: dadosIniciais?.cnpj || String(extraidos.cnpj || ''),
       servico: dadosIniciais?.servico || String(extraidos.servico || ''),
       servico_descricao: String(extraidos.servico_descricao || ''),
+      cnpj_tomador: String(extraidos.cnpj_tomador || ''),
+      codigo_servico_nfse: String(extraidos.codigo_servico_nfse || ''),
+      item_lista_lc116: String(extraidos.item_lista_lc116 || ''),
       valor: dadosIniciais?.valor || (extraidos.valor ? String(extraidos.valor).replace('.', ',') : ''),
+      valor_liquido: typeof extraidos.valor_liquido === 'number' ? String(extraidos.valor_liquido).replace('.', ',') : '',
+      iss_retencao: String(extraidos.iss_retencao || ''),
+      numero_nfse: String(extraidos.numero_nfse || ''),
+      data_emissao: String(extraidos.data_emissao || ''),
+      simples_nacional_nfse: String(extraidos.simples_nacional_nfse || ''),
+      mei_nfse: extraidos.mei_nfse === true,
       cidade: dadosIniciais?.cidade || String(extraidos.cidade || ''),
       uf: dadosIniciais?.uf || String(extraidos.uf || ''),
-      candidatos: data.candidatos_ocr || {},
+      candidatos: data.candidatos_ocr || data.candidatos || {},
       divergencias: data.campos_divergentes || [],
-      confiança: Number(data['confiança_ocr'] || 0),
+      confiança: Number(data['confiança_ocr'] ?? data.confianza_ocr ?? 0),
       erros: data.erros_ocr || [],
+      metodoOcr: String(data.metodo_ocr || 'extração multimodal'),
     };
     const divergencias = new Set<string>(data.campos_divergentes || []);
     const camposPerguntar = CAMPOS_REVISAO
@@ -307,20 +327,19 @@ Sou um assistente especializado em análise de Notas Fiscais de Serviço. Posso 
         const valor = dadosRevisao[chave];
         const preenchidoManualmente = Boolean(dadosIniciais?.[chave]);
         if (preenchidoManualmente) return false;
-        const candidatosCampo = data.candidatos_ocr?.[chave] || [];
+        const candidatosCampo = (data.candidatos_ocr || data.candidatos)?.[chave] || [];
         const candidatoUnicoValido = candidatosCampo.length === 1 && validarRespostaCampo(chave, candidatosCampo[0]);
-        // Confianza alta: um único candidato válido e sem divergência no campo.
-        // Auto-completar sem perguntar; só se pregunta o vazio, ilegible ou ambíguo.
+        // Preenche o campo com o candidato único válido, mas mantém o campo na
+        // lista de conferência para que o usuário confirme no modal.
         if (candidatoUnicoValido && !divergencias.has(chave)) {
           dadosRevisao[chave] = candidatosCampo[0];
-          return false;
         }
         return !validarRespostaCampo(chave, valor) || candidatosCampo.length > 1;
       })
       .map(({ chave }) => chave);
     const revisao = { ...dadosRevisao, camposPerguntar };
     setRevisaoOcr(revisao);
-    // Verifica coherencia entre "Serviço Prestado" (tributação) e
+    // Verifica coerência entre "Serviço Prestado" (código, para tributação) e
     // "Descrição do Serviço" (informativo). Se há discrepancia grande, avisa.
     const servicoPrestado = revisao.servico.trim();
     const descricaoServicio = revisao.servico_descricao.trim();
@@ -332,23 +351,13 @@ Sou um assistente especializado em análise de Notas Fiscais de Serviço. Posso 
       const total = Math.max(palavrasServicio.size, 1);
       const similitud = coincidencias / total;
       if (similitud < 0.3) {
-        avisoDiscrepancia = `\n\n⚠️ **Atenção:** a "Descrição do Serviço" ("${descricaoServicio.slice(0, 120)}...") não parece coincidir com o "Serviço Prestado" declarado ("${servicoPrestado.slice(0, 120)}..."). Verifique se o documento é correto antes de confiar na análise.`;
+        avisoDiscrepancia = `\n\n⚠️ **Verifique o serviço:** o "Serviço Prestado" declarado ("${servicoPrestado.slice(0, 120)}...") não parece coincidir com a "Descrição do Serviço" ("${descricaoServicio.slice(0, 120)}..."). Para a análise fiscal se usará o código do "Serviço Prestado", que é o único válido a fins tributários. Confirme que o documento é correto.`;
       }
     }
-    if (camposPerguntar.length === 0) {
-      // Todos os campos foram lidos com alta confianza (candidato único válido
-      // e sem divergência). Ir direto à análise fiscal, sem pedir confirmação.
-      setRevisaoCampoIndex(null);
-      addMessage('assistant', `A leitura encontrou todos os campos necessários com alta confianza. Inicio a análise fiscal.${avisoDiscrepancia}`);
-      await enviarDatosConferidos(revisao);
-      return;
-    }
-    setRevisaoCampoIndex(0);
-    addMessage('assistant', perguntaCampoRevisao(camposPerguntar[0], revisao, data.candidatos_ocr || {}, data.erros_ocr || []));
-    const camposConflitantes = CAMPOS_REVISAO.filter(({ chave }) => (data.candidatos_ocr?.[chave] || []).length > 1);
-    if (camposConflitantes.length) {
-      addMessage('assistant', `Atenção: encontrei mais de uma leitura para ${camposConflitantes.map(({ rotulo }) => rotulo).join(', ')}. Vou perguntar esses campos no chat e não vou selecionar um automaticamente.`);
-    }
+    // O modal deve aparecer sempre, mesmo quando todos os campos parecem
+    // inequívocos. A análise só pode começar pela confirmação explícita nele.
+    setRevisaoCampoIndex(null);
+    addMessage('assistant', `Extração concluída. Revise e, se necessário, corrija todos os campos no modal antes de confirmar a análise fiscal.${avisoDiscrepancia}`);
   };
 
   const perguntaCampoRevisao = (chave: RevisaoOcr['camposPerguntar'][number], dados: Pick<RevisaoOcr, 'cnpj' | 'servico' | 'valor' | 'cidade' | 'uf'>, candidatos: Record<string, string[]>, erros: string[] = []) => {
@@ -439,9 +448,18 @@ Sou um assistente especializado em análise de Notas Fiscais de Serviço. Posso 
     const payload = new FormData();
     payload.append('archivo', revisao.arquivo);
     payload.append('cnpj', revisao.cnpj);
+    if (revisao.cnpj_tomador.trim()) payload.append('cnpj_tomador', revisao.cnpj_tomador.trim());
     payload.append('servico', revisao.servico);
     if (revisao.servico_descricao.trim()) payload.append('servico_descricao', revisao.servico_descricao.trim());
+    if (revisao.codigo_servico_nfse.trim()) payload.append('codigo_servico_nfse', revisao.codigo_servico_nfse.trim());
+    if (revisao.item_lista_lc116.trim()) payload.append('item_lista_lc116', revisao.item_lista_lc116.trim());
     payload.append('valor', revisao.valor);
+    if (revisao.valor_liquido.trim()) payload.append('valor_liquido', revisao.valor_liquido.trim());
+    if (revisao.iss_retencao.trim()) payload.append('iss_retencao', revisao.iss_retencao.trim());
+    if (revisao.numero_nfse.trim()) payload.append('numero_nfse', revisao.numero_nfse.trim());
+    if (revisao.data_emissao.trim()) payload.append('data_emissao', revisao.data_emissao.trim());
+    if (revisao.simples_nacional_nfse.trim()) payload.append('simples_nacional_nfse', revisao.simples_nacional_nfse.trim());
+    payload.append('mei_nfse', String(revisao.mei_nfse));
     payload.append('cidade', revisao.cidade);
     payload.append('uf', revisao.uf);
     if (revisao.texto.trim()) payload.append('mensaje', revisao.texto.trim());
@@ -641,8 +659,12 @@ Envie os dados da NFSe que desejo ajudar.`,
             <h2 id="ocr-review-title" className="text-xl font-semibold text-white">Conferir dados da NFSe</h2>
             <p className="mt-2 text-sm text-amber-300">A leitura automática pode errar. Compare cada campo com o PDF/imagem original; a análise só começa após sua confirmação.</p>
             <a href={revisaoOcr.urlOriginal} target="_blank" rel="noreferrer" className="mt-2 inline-flex text-sm text-blue-300 underline">Abrir arquivo original: {revisaoOcr.arquivo.name}</a>
-            <p className="mt-1 text-xs text-slate-400">Concordância dos modelos: {Math.round(revisaoOcr.confiança * 100)}% — indicador auxiliar, não é garantia de acerto.</p>
+            <p className="mt-1 text-xs text-slate-400">Método: {revisaoOcr.metodoOcr}. Concordância dos modelos: {Math.round(revisaoOcr.confiança * 100)}% — indicador auxiliar, não é garantia de acerto. Nenhuma análise começa sem confirmação neste modal.</p>
             {revisaoOcr.erros.length > 0 && <p className="mt-2 text-xs text-amber-200">Observações: {revisaoOcr.erros.join('; ')}</p>}
+            {revisaoOcr.texto.trim() && <details className="mt-3 rounded-lg border border-slate-700 bg-slate-800/60 p-3">
+              <summary className="cursor-pointer text-sm text-blue-200">Ver texto reconhecido pelo OCR</summary>
+              <pre className="mt-3 max-h-48 overflow-auto whitespace-pre-wrap text-xs text-slate-300">{revisaoOcr.texto}</pre>
+            </details>}
             <div className="mt-5 grid gap-4 sm:grid-cols-2">
               {([
                 ['cnpj', 'CNPJ do prestador'],
@@ -662,6 +684,37 @@ Envie os dados da NFSe que desejo ajudar.`,
                 </label>
               ))}
               {revisaoOcr.cidadeUfManual && <p className="sm:col-span-2 text-xs text-slate-400">Município e UF vieram preenchidos manualmente no formulário; confira-os no documento, pois determinam regras tributárias locais.</p>}
+            </div>
+            <div className="mt-6 border-t border-slate-700 pt-5">
+              <h3 className="text-sm font-semibold text-white">Outros dados fiscais extraídos</h3>
+              <p className="mt-1 text-xs text-slate-400">São declarações/transcrições da nota, não confirmação cadastral. Revise e corrija conforme o original; campos vazios não foram identificados.</p>
+              <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                {([
+                  ['cnpj_tomador', 'CNPJ do tomador'],
+                  ['servico_descricao', 'Descrição detalhada do serviço'],
+                  ['codigo_servico_nfse', 'Código do serviço na NFSe'],
+                  ['item_lista_lc116', 'Item da lista LC 116'],
+                  ['valor_liquido', 'Valor líquido (R$)'],
+                  ['iss_retencao', 'Retenção do ISS declarada'],
+                  ['numero_nfse', 'Número da NFSe'],
+                  ['data_emissao', 'Data de emissão'],
+                  ['simples_nacional_nfse', 'Simples Nacional declarado na nota'],
+                ] as const).map(([campo, rotulo]) => (
+                  <label key={campo} className="text-sm text-slate-300">
+                    {rotulo}
+                    <input
+                      value={revisaoOcr[campo]}
+                      onChange={(event) => setRevisaoOcr((prev) => prev ? { ...prev, [campo]: event.target.value, confirmouConferencia: false } : prev)}
+                      className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-white focus:border-blue-500 focus:outline-none"
+                    />
+                  </label>
+                ))}
+                <label className="flex items-center gap-2 text-sm text-slate-300">
+                  <input type="checkbox" checked={revisaoOcr.mei_nfse} onChange={(event) => setRevisaoOcr((prev) => prev ? { ...prev, mei_nfse: event.target.checked, confirmouConferencia: false } : prev)} className="accent-emerald-500" />
+                  NFSe declara prestador como MEI
+                </label>
+              </div>
+              {revisaoOcr.camposPerguntar.length > 0 && <p className="mt-3 text-xs text-amber-200">Campos que a extração marcou para conferência: {revisaoOcr.camposPerguntar.join(', ')}. Compare-os com atenção antes da confirmação.</p>}
             </div>
             <div className="mt-6 flex flex-wrap justify-end gap-3">
               <button onClick={() => { URL.revokeObjectURL(revisaoOcr.urlOriginal); setRevisaoOcr(null); }} disabled={isLoading} className="rounded-lg border border-slate-600 px-4 py-2 text-slate-200">Cancelar</button>

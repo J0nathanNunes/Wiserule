@@ -9,6 +9,7 @@ export interface EmpresaData {
   nome_fantasia: string;
   situacao: string;
   cnae: string;
+  cnae_codigo: string;
   cnae_descricao: string;
   cnaes_secundarios: Array<{ codigo: string; descricao: string }>;
   natureza_juridica: string;
@@ -38,6 +39,7 @@ export function emptyEmpresa(cnpj: string, situacao = ''): EmpresaData {
     nome_fantasia: '',
     situacao,
     cnae: '',
+    cnae_codigo: '',
     cnae_descricao: '',
     cnaes_secundarios: [],
     natureza_juridica: '',
@@ -68,7 +70,7 @@ export async function consultarCnpj(cnpj: string, minhaReceitaUrl: string): Prom
     const res = await fetch(url, { headers: { 'User-Agent': 'Wiserule/1.0' } });
     if (!res.ok) return emptyEmpresa(cnpj, `Erro: HTTP ${res.status}`);
 
-    const data = await res.json();
+    const data = await res.json() as Record<string, any>;
     if (!data || !data.cnpj) return emptyEmpresa(cnpj);
 
     return {
@@ -77,6 +79,7 @@ export async function consultarCnpj(cnpj: string, minhaReceitaUrl: string): Prom
       nome_fantasia: data.nome_fantasia || '',
       situacao: data.descricao_situacao_cadastral || '',
       cnae: data.cnae_fiscal_descricao || '',
+      cnae_codigo: String(data.cnae_fiscal || ''),
       cnae_descricao: data.cnae_fiscal_descricao || '',
       cnaes_secundarios: data.cnaes_secundarios || [],
       natureza_juridica: data.natureza_juridica || '',
@@ -110,12 +113,13 @@ export async function consultarCnpjFallback(cnpj: string): Promise<EmpresaData> 
     const res = await fetch(url);
     if (!res.ok) return emptyEmpresa(cnpj, 'Erro: falha en las dos APIs de CNPJ');
 
-    const data = await res.json();
+    const data = await res.json() as Record<string, any>;
     return {
       ...emptyEmpresa(cnpj),
       razao_social: data.razao_social || '',
       situacao: data.descricao_situacao_cadastral || '',
       cnae: data.cnae_fiscal_descricao || '',
+      cnae_codigo: String(data.cnae_fiscal || ''),
       cnae_descricao: data.cnae_fiscal_descricao || '',
       natureza_juridica: data.natureza_juridica || '',
       porte: data.porte || '',

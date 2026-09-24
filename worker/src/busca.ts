@@ -1,6 +1,6 @@
 /**
- * Búsqueda online usando Tavily.
- * Equivalente a backend/busca_online.py en Python.
+ * Busca online usando Tavily.
+ * Equivalente a backend/busca_online.py em Python.
  */
 
 import { Env } from './config';
@@ -77,12 +77,12 @@ async function buscarTavily(pergunta: string, apiKey: string): Promise<Resultado
       }),
     });
     if (!res.ok) return [];
-    const data = await res.json();
+    const data = await res.json() as { results?: Array<Record<string, unknown>> };
 
-    const resultados: ResultadoBusca[] = (data.results || []).map((item: Record<string, unknown>) => ({
-      title: item.title || '',
-      url: item.url || '',
-      content: item.raw_content || item.content || '',
+    const resultados: ResultadoBusca[] = (data.results || []).map((item) => ({
+      title: typeof item.title === 'string' ? item.title : '',
+      url: typeof item.url === 'string' ? item.url : '',
+      content: typeof item.raw_content === 'string' ? item.raw_content : typeof item.content === 'string' ? item.content : '',
     }));
 
     return filtrarResultadosConfiable(resultados);

@@ -10,7 +10,7 @@ import { consultarCnpj, consultarCnpjFallback, emptyEmpresa } from './cnpj';
 import { extraerDatosNfse, extraerDatosTexto, generarAnalisis } from './llm';
 import { codificarBase64, decodificarBase64 } from './encoding';
 import { buscarOnline, formatearBuscaParaLlm } from './busca';
-import { correlacionarPorCnae, formatearCorrelacionParaLlm } from './correlacao';
+import { correlacionarPorCnae, formatarCorrelacaoParaLlm } from './correlacao';
 import { formatearClasificacionParaLlm } from './classificacao';
 import { salvarAnalise, listarAnalises, buscarAnalisePorId } from './db';
 import { consultarNotas } from './geranet';
@@ -80,6 +80,7 @@ function arquivoCorrespondeExtensao(bytes: Uint8Array, extensao: string): boolea
   return false;
 }
 
+
 const app = new Hono<{ Bindings: Env }>();
 
 // CORS
@@ -138,11 +139,19 @@ app.post('/api/analisar', async (c) => {
     const cnpjForm = form.get('cnpj')?.toString() || '';
     const servicoForm = form.get('servico')?.toString() || '';
     const servicoDescricaoForm = form.get('servico_descricao')?.toString() || '';
+    const cnpjTomadorForm = form.get('cnpj_tomador')?.toString() || '';
+    const codigoServicoForm = form.get('codigo_servico_nfse')?.toString() || '';
+    const itemListaLc116Form = form.get('item_lista_lc116')?.toString() || '';
     const valorForm = form.get('valor')?.toString() || '';
+    const valorLiquidoForm = form.get('valor_liquido')?.toString() || '';
+    const issRetencaoForm = form.get('iss_retencao')?.toString() || '';
+    const numeroNfseForm = form.get('numero_nfse')?.toString() || '';
+    const dataEmissaoForm = form.get('data_emissao')?.toString() || '';
+    const simplesNacionalNfseForm = form.get('simples_nacional_nfse')?.toString() || '';
+    const meiNfseForm = form.get('mei_nfse')?.toString() === 'true';
     const cidadeForm = form.get('cidade')?.toString() || '';
     const ufForm = form.get('uf')?.toString() || '';
     const mensajeForm = form.get('mensaje')?.toString() || '';
-    const cnpjTomador = form.get('cnpj_tomador')?.toString() || '';
     const archivo = form.get('archivo');
     const dadosConfirmados = form.get('confirmar_dados')?.toString() === 'true';
 
@@ -168,9 +177,18 @@ app.post('/api/analisar', async (c) => {
       if (dadosConfirmados) {
         datosExtraidos = {
           cnpj: cnpjForm,
+          cnpj_tomador: cnpjTomadorForm,
           servico: servicoForm,
           servico_descricao: servicoDescricaoForm,
+          codigo_servico_nfse: codigoServicoForm,
+          item_lista_lc116: itemListaLc116Form,
           valor: parseValorMonetario(valorForm),
+          valor_liquido: valorLiquidoForm ? parseValorMonetario(valorLiquidoForm) : undefined,
+          iss_retencao: issRetencaoForm,
+          numero_nfse: numeroNfseForm,
+          data_emissao: dataEmissaoForm,
+          simples_nacional_nfse: simplesNacionalNfseForm,
+          mei_nfse: meiNfseForm,
           cidade: cidadeForm,
           uf: ufForm,
           confianza_ocr: 0,
@@ -196,7 +214,15 @@ app.post('/api/analisar', async (c) => {
           }
         }
 
+        // O LLM multimodal do OpenRouter faz o OCR de imagens e PDFs digitalizados.
         resultadoOcr = await extraerDatosNfse(base64, extension, config, env.OPENROUTER_API_KEY || '', textoPdfExtraido);
+        if (!env.OPENROUTER_API_KEY && !textoPdfExtraido?.trim()) {
+          return c.json({
+            status: 'error',
+            error: 'A extração não encontrou texto no documento. Configure a chave OpenRouter para habilitar OCR de imagens e PDFs digitalizados.',
+            erros_ocr: resultadoOcr.erros,
+          }, 422);
+        }
         datosExtraidos = resultadoOcr.dados as unknown as Record<string, unknown>;
       }
     } else if (mensajeForm && !cnpjForm && !servicoForm && !valorForm && !cidadeForm) {
@@ -211,6 +237,15 @@ app.post('/api/analisar', async (c) => {
     const valor = valorForm ? parseValorMonetario(valorForm) : Number(datosExtraidos.valor || 0);
     const cidade = cidadeForm || String(datosExtraidos.cidade || '');
     const uf = ufForm || String(datosExtraidos.uf || '');
+    const cnpjTomador = cnpjTomadorForm || String(datosExtraidos.cnpj_tomador || '');
+    const codigoServicoNfse = codigoServicoForm || String(datosExtraidos.codigo_servico_nfse || '');
+    const itemListaLc116 = itemListaLc116Form || String(datosExtraidos.item_lista_lc116 || '');
+    const valorLiquido = valorLiquidoForm ? parseValorMonetario(valorLiquidoForm) : typeof datosExtraidos.valor_liquido === 'number' ? datosExtraidos.valor_liquido : undefined;
+    const retencaoIssNfse = issRetencaoForm || String(datosExtraidos.iss_retencao || '');
+    const numeroNfse = numeroNfseForm || String(datosExtraidos.numero_nfse || '');
+    const dataEmissao = dataEmissaoForm || String(datosExtraidos.data_emissao || '');
+    const simplesNacionalNfse = simplesNacionalNfseForm || String(datosExtraidos.simples_nacional_nfse || '');
+    const meiNfse = meiNfseForm || datosExtraidos.mei_nfse === true;
 
     const divergenciasCriticas = resultadoOcr?.campos_divergentes.filter((campo) => {
       if (campo === 'cnpj') return !cnpjForm;
@@ -221,14 +256,25 @@ app.post('/api/analisar', async (c) => {
       return false;
     }) || [];
 
+    if (archivo instanceof File && dadosConfirmados) {
+      const camposInvalidos = [cnpjTomador && !validarCnpj(cnpjTomador), valorLiquido !== undefined && valorLiquido < 0]
+        .some(Boolean);
+      if (camposInvalidos) {
+        return c.json({ status: 'error', error: 'Os dados fiscais complementares incluem CNPJ do tomador inválido ou valor líquido negativo. Confira a NFSe.' }, 422);
+      }
+    }
+
     // Anexo nunca inicia análise diretamente: exige leitura/revisão confirmada pelo usuário.
     if (archivo instanceof File && !dadosConfirmados) {
       return c.json({
         status: 'revisao_necessaria',
-        mensagem: 'Confira os campos extraídos da NFSe e confirme antes de iniciar a análise.',
-        dados_extraidos: { cnpj, servico, servico_descricao: servicoDescricao, valor, cidade, uf },
+        mensagem: 'Confira os dados extraídos no documento original antes de iniciar a análise fiscal.',
+        dados_extraidos: datosExtraidos,
+        confiança_ocr: resultadoOcr?.confianza || 0,
         candidatos_ocr: resultadoOcr?.candidatos || {},
-        confiança_ocr: resultadoOcr?.confianza ?? 0,
+        candidatos: resultadoOcr?.candidatos || {},
+        texto_ocr: resultadoOcr?.texto_ocr || '',
+        metodo_ocr: resultadoOcr?.metodo || '',
         campos_divergentes: resultadoOcr?.campos_divergentes || [],
         erros_ocr: resultadoOcr?.erros || [],
       });
@@ -275,19 +321,19 @@ app.post('/api/analisar', async (c) => {
 
     await actualizarEtapa('Consultando Receita Federal...', 20);
     const empresa = await consultarCnpj(cnpjLimpio, config.minhaReceitaUrl);
-    if (!empresa.razon_social && empresa.situacion && empresa.situacion.startsWith('Erro')) {
+    if (!empresa.razao_social && empresa.situacao && empresa.situacao.startsWith('Erro')) {
       const fallback = await consultarCnpjFallback(cnpjLimpio);
-      if (fallback.razon_social) {
+      if (fallback.razao_social) {
         Object.assign(empresa, fallback);
       }
     }
-    const correlacion = correlacionarPorCnae(empresa.cnae, servico);
-    const correlacionFormatada = formatearCorrelacionParaLlm(correlacion);
+    const correlacion = correlacionarPorCnae(empresa.cnae_codigo, `${servico} ${codigoServicoNfse}`.trim());
+    const correlacionFormatada = formatarCorrelacaoParaLlm(correlacion);
 
     // --- FASE 3: Búsqueda online ---
     await actualizarEtapa('Consultando legislação aplicable...', 40);
     const cnaeStr = empresa.cnae || servico;
-    const pregunta = `${cnaeStr} ${servico} retenci+�n ISS ${cidade} ${uf} LC 116 legislaci+�n`;
+    const pregunta = `${cnaeStr} ${servico} retenção ISS ${cidade} ${uf} LC 116 legislação`;
     const resultadosBusca = await buscarOnline(pregunta, env);
     const buscaFormatada = formatearBuscaParaLlm(resultadosBusca);
 
@@ -302,17 +348,35 @@ app.post('/api/analisar', async (c) => {
       ciudadPrestador: empresa.municipio,
       cnpjTomador,
       valorServicio: valor,
-      cnaeServicio: empresa.cnae,
-      descripcionServicio: servico,
+      cnaeServicio: empresa.cnae_codigo || empresa.cnae,
+      descripcionServicio: `${servico} ${servicoDescricao}`.trim(),
+      // A situação declarada na nota é evidência documental, não status cadastral.
+      // Para regras automáticas de retenção/cota use o dado cadastral consultado;
+      // a declaração da NFSe continua separada no contexto do relatório.
       prestadorEsMei: empresa.mei,
     });
 
     // Dispara o processamento em background
     const contexto = {
       empresa,
+      nfse: {
+        numero: numeroNfse,
+        data_emissao: dataEmissao,
+        cnpj_prestador: cnpjLimpio,
+        cnpj_tomador: cnpjTomador,
+        codigo_servico: codigoServicoNfse,
+        item_lista_lc116: itemListaLc116,
+        descricao_servico: servico,
+        detalhamento_servico: servicoDescricao,
+        valor_bruto: valor,
+        valor_liquido: valorLiquido,
+        iss_retencao_declarada: retencaoIssNfse,
+        simples_nacional_declarado: simplesNacionalNfse,
+        mei_declarado: meiNfse,
+      },
       correlacion_formatada: correlacionFormatada,
-      cnae_codigo: empresa.cnae,
-      cnae_descripcion: empresa.cnae_descripcion,
+      cnae_codigo: empresa.cnae_codigo,
+      cnae_descricao: empresa.cnae_descricao,
       cnaes_secundarios: empresa.cnaes_secundarios,
       valor,
       cidade,
@@ -421,6 +485,9 @@ app.post('/api/extrair', async (c) => {
     if (!['png', 'jpg', 'jpeg', 'pdf'].includes(extension)) {
       return c.json({ status: 'error', error: 'Formato não suportado. Envie PNG, JPG ou PDF.' }, 415);
     }
+    if (!arquivoCorrespondeExtensao(bytes, extension)) {
+      return c.json({ status: 'error', error: 'O conteúdo do arquivo não corresponde à extensão informada.' }, 415);
+    }
 
     let binary = '';
     for (const byte of bytes) {
@@ -430,8 +497,15 @@ app.post('/api/extrair', async (c) => {
 
     let textoPdf: string | undefined;
     if (extension === 'pdf') {
-      const { extrairTextoPdf } = await import('./pdf');
-      textoPdf = await extrairTextoPdf(bytes);
+      try {
+        const { extrairTextoPdf } = await import('./pdf');
+        textoPdf = await extrairTextoPdf(bytes);
+      } catch (e) {
+        console.error('[PDF] Erro ao extrair texto no endpoint OCR:', e);
+      }
+    }
+    if (!textoPdf?.trim() && !env.OPENROUTER_API_KEY) {
+      return c.json({ status: 'error', error: 'Não foi possível extrair texto do documento e o OCR multimodal não está configurado. Configure a chave OpenRouter.' }, 422);
     }
     const resultado = await extraerDatosNfse(base64, extension, config, env.OPENROUTER_API_KEY || '', textoPdf);
     return c.json({
@@ -441,6 +515,9 @@ app.post('/api/extrair', async (c) => {
       confianza: resultado.confianza,
       campos_divergentes: resultado.campos_divergentes,
       erros: resultado.erros,
+      candidatos: resultado.candidatos,
+      texto_ocr: resultado.texto_ocr || '',
+      metodo_ocr: resultado.metodo,
     });
   } catch (e) {
     return c.json({ status: 'error', error: `Error interno: ${e instanceof Error ? e.message : 'desconocido'}` });

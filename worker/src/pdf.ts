@@ -5,14 +5,22 @@
 
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 
+// Cloudflare Workers não disponibiliza Worker threads/web workers para este
+// parser. O PDF.js oferece o fake worker para execução single-thread; no bundle
+// do Wrangler, pdf.worker.mjs é incluído pelo import explícito.
+import 'pdfjs-dist/legacy/build/pdf.worker.mjs';
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = '';
+
+
 /**
  * Extrai texto de um PDF a partir de bytes brutos.
  * Retorna o texto concatenado de todas as páginas.
  */
 export async function extrairTextoPdf(pdfBytes: Uint8Array): Promise<string> {
   try {
-    // Desabilita worker (não disponível em Cloudflare Workers).
-    pdfjsLib.GlobalWorkerOptions.workerSrc = '';
+    // Não definir workerSrc como string vazia: isso faz o PDF.js falhar ao criar o
+    // fake worker. O worker legado é resolvido junto à versão do pdfjs-dist instalada.
     const loadingTask = pdfjsLib.getDocument({
       data: pdfBytes,
       isEvalSupported: false,

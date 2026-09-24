@@ -39,12 +39,12 @@ function obtenerCertificadoHex(env: Env, cnpj: string | null): string {
   // 2. Variable individual GERANET_CERT_{CNPJ}
   if (cnpj) {
     const varName = `GERANET_CERT_${cnpj}`;
-    const valor = (env as Record<string, string | undefined>)[varName];
+    const valor = (env as unknown as Record<string, string | undefined>)[varName];
     if (valor) return valor;
   }
 
   // 3. Certificado único (legado)
-  const certBase64 = (env as Record<string, string | undefined>).GERANET_CERT_BASE64;
+  const certBase64 = (env as unknown as Record<string, string | undefined>).GERANET_CERT_BASE64;
   if (certBase64) return certBase64;
 
   throw new Error(
@@ -108,7 +108,7 @@ export async function consultarNotas(
       return { status: 'error', error: `Geranet retornó HTTP ${res.status}: ${body.slice(0, 300)}` };
     }
 
-    const data = await res.json();
+    const data = await res.json() as Record<string, unknown>;
     if (data.situacion === 'error') {
       return { status: 'error', error: `Geranet retornó error: ${data.mensaje || 'sin mensaje'}` };
     }
