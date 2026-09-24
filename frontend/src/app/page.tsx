@@ -167,11 +167,9 @@ Sou um assistente especializado em análise de Notas Fiscais de Serviço. Posso 
           // Decodifica Base64 (o backend codifica o relatório para protegê-lo do Durable Object)
           const relatorio = decodificarRelatorio(data.relatorio_completo);
           const tempoTotal = inicioEm ? formatearTempo(Date.now() - inicioEm) : '';
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === assistantMsgId ? { ...m, content: `✅ **Análise concluída**${tempoTotal ? ` em ${tempoTotal}` : ''}.\n\n${relatorio}` } : m
-            )
-          );
+          // Adiciona o relatório como nova mensagem no final, após as mensagens
+          // de progresso (ex.: "Gerando relatório completo..."), preservando a ordem.
+          addMessage('assistant', `✅ **Análise concluída**${tempoTotal ? ` em ${tempoTotal}` : ''}.\n\n${relatorio}`);
           setIsLoading(false);
           setStatusMsg('');
           return;
