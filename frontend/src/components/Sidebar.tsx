@@ -12,14 +12,12 @@ type FormData = {
 };
 
 type SidebarProps = {
-  isOpen: boolean;
-  onToggle: () => void;
   onSubmit: (data: FormData, arquivo?: File | null) => void;
   isLoading: boolean;
   onNovaAnalise: () => void;
 };
 
-export default function Sidebar({ isOpen, onToggle, onSubmit, isLoading, onNovaAnalise }: SidebarProps) {
+export default function Sidebar({ onSubmit, isLoading, onNovaAnalise }: SidebarProps) {
   const [formData, setFormData] = useState<FormData>({
     cnpj: '',
     servico: '',
@@ -64,27 +62,22 @@ export default function Sidebar({ isOpen, onToggle, onSubmit, isLoading, onNovaA
     return digits.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
   };
 
-  if (!isOpen) return null;
-
   return (
-    <div className="w-80 bg-slate-800 border-r border-slate-700 flex flex-col h-full overflow-y-auto">
+    <aside className="wiserule-sidebar w-[19rem] shrink-0 flex flex-col h-full overflow-y-auto">
       {/* Header */}
-      <div className="p-4 border-b border-slate-700">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="text-2xl">🤖</span>
-            <h2 className="text-lg font-semibold text-white">Wiserule</h2>
-          </div>
-          <button
-            onClick={onToggle}
-            className="text-slate-400 hover:text-white transition-colors"
-          >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+      <div className="p-5 border-b border-slate-700">
+        <div className="flex items-center gap-3">
+          <span className="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+              <path d="M2.5 4h7l11.5 16h-7L2.5 4Z" fill="currentColor" />
+              <path d="M14.2 4h7.3l-6.1 8.8-3.8-5.3L14.2 4Z" fill="currentColor" opacity=".78" />
             </svg>
-          </button>
+          </span>
+          <div>
+            <h2 className="sidebar-brand font-serif text-[1.28rem] leading-none font-medium tracking-tight">Wiserule</h2>
+            <p className="sidebar-caption mt-1 text-[9px] uppercase tracking-[.19em]">Regra clara. Decisão segura.</p>
+          </div>
         </div>
-        <p className="text-xs text-slate-400 mt-1">Análise Fiscal Inteligente</p>
       </div>
 
       {/* Nova Análise Button */}
@@ -92,10 +85,10 @@ export default function Sidebar({ isOpen, onToggle, onSubmit, isLoading, onNovaA
         <button
           onClick={onNovaAnalise}
           disabled={isLoading}
-          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-500 hover:to-purple-500 transition-all text-sm font-medium disabled:opacity-50"
+          className="sidebar-new w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-[#397b78] text-white rounded-sm hover:bg-[#2d6865] transition-colors text-sm font-medium disabled:opacity-50"
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            <path strokeLinecap="square" strokeLinejoin="miter" strokeWidth={1.7} d="M12 5v14M5 12h14" />
           </svg>
           Nova Análise
         </button>
@@ -105,39 +98,39 @@ export default function Sidebar({ isOpen, onToggle, onSubmit, isLoading, onNovaA
       <form onSubmit={handleSubmit} className="p-4 pt-0 space-y-4 flex-1">
         {/* CNPJ */}
         <div>
-          <label className="block text-xs font-medium text-slate-400 mb-1">CNPJ do Prestador</label>
+          <label className="block text-xs font-medium text-[#63716e] mb-1">CNPJ do Prestador</label>
           <input
             type="text"
             value={formatCnpj(formData.cnpj)}
             onChange={(e) => handleChange('cnpj', e.target.value)}
             placeholder="00.000.000/0000-00"
-            className="w-full bg-slate-700 text-white placeholder-slate-500 rounded-lg px-3 py-2 text-sm border border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full rounded-sm px-3 py-2 text-sm focus:outline-none"
             disabled={isLoading}
           />
         </div>
 
         {/* Serviço */}
         <div>
-          <label className="block text-xs font-medium text-slate-400 mb-1">Descrição do Serviço</label>
+          <label className="block text-xs font-medium text-[#63716e] mb-1">Descrição do Serviço</label>
           <input
             type="text"
             value={formData.servico}
             onChange={(e) => handleChange('servico', e.target.value)}
             placeholder="Ex.: Desenvolvimento de software"
-            className="w-full bg-slate-700 text-white placeholder-slate-500 rounded-lg px-3 py-2 text-sm border border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full rounded-sm px-3 py-2 text-sm focus:outline-none"
             disabled={isLoading}
           />
         </div>
 
         {/* Valor */}
         <div>
-          <label className="block text-xs font-medium text-slate-400 mb-1">Valor do Serviço (R$)</label>
+          <label className="block text-xs font-medium text-[#63716e] mb-1">Valor do Serviço (R$)</label>
           <input
             type="text"
             value={formData.valor}
             onChange={(e) => handleChange('valor', e.target.value)}
             placeholder="1.000,00"
-            className="w-full bg-slate-700 text-white placeholder-slate-500 rounded-lg px-3 py-2 text-sm border border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full rounded-sm px-3 py-2 text-sm focus:outline-none"
             disabled={isLoading}
           />
         </div>
@@ -145,22 +138,22 @@ export default function Sidebar({ isOpen, onToggle, onSubmit, isLoading, onNovaA
         {/* Cidade / UF */}
         <div className="grid grid-cols-3 gap-2">
           <div className="col-span-2">
-            <label className="block text-xs font-medium text-slate-400 mb-1">Cidade</label>
+            <label className="block text-xs font-medium text-[#63716e] mb-1">Cidade</label>
             <input
               type="text"
               value={formData.cidade}
               onChange={(e) => handleChange('cidade', e.target.value)}
               placeholder="Campo Grande"
-              className="w-full bg-slate-700 text-white placeholder-slate-500 rounded-lg px-3 py-2 text-sm border border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full rounded-sm px-3 py-2 text-sm focus:outline-none"
               disabled={isLoading}
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-slate-400 mb-1">UF</label>
+            <label className="block text-xs font-medium text-[#63716e] mb-1">UF</label>
             <select
               value={formData.uf}
               onChange={(e) => handleChange('uf', e.target.value)}
-              className="w-full bg-slate-700 text-white rounded-lg px-3 py-2 text-sm border border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full rounded-sm px-3 py-2 text-sm focus:outline-none"
               disabled={isLoading}
             >
               <option value="">Detectar pela NFSe</option>
@@ -197,12 +190,12 @@ export default function Sidebar({ isOpen, onToggle, onSubmit, isLoading, onNovaA
 
         {/* File Upload */}
         <div>
-          <label className="block text-xs font-medium text-slate-400 mb-1">Anexar NFSe (opcional)</label>
-          <label className="flex items-center gap-2 px-3 py-2.5 bg-slate-700 border border-dashed border-slate-500 rounded-lg cursor-pointer hover:border-blue-400 transition-colors">
-            <svg className="w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <label className="block text-xs font-medium text-[#63716e] mb-1">Anexar NFSe (opcional)</label>
+          <label className="sidebar-upload flex items-center gap-2 px-3 py-2.5 bg-[#f4f6f2] border border-dashed border-[#bdcbc6] rounded-sm cursor-pointer hover:border-[#397b78] transition-colors">
+            <svg className="w-5 h-5 text-[#71817e]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
             </svg>
-            <span className="text-sm text-slate-400">
+            <span className="text-sm text-[#697875]">
               {selectedFile ? selectedFile.name : 'Clique para anexar'}
             </span>
             <input
@@ -228,7 +221,7 @@ export default function Sidebar({ isOpen, onToggle, onSubmit, isLoading, onNovaA
         <button
           type="submit"
           disabled={isLoading}
-          className="w-full py-2.5 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white rounded-lg hover:from-emerald-500 hover:to-emerald-600 transition-all text-sm font-medium disabled:opacity-50 shadow-lg shadow-emerald-500/20"
+          className="sidebar-submit w-full py-2.5 bg-[#263f3e] text-white rounded-sm hover:bg-[#1f3332] transition-colors text-sm font-semibold disabled:opacity-50"
         >
           {isLoading ? (
             <span className="flex items-center justify-center gap-2">
@@ -239,7 +232,7 @@ export default function Sidebar({ isOpen, onToggle, onSubmit, isLoading, onNovaA
               Analisando...
             </span>
           ) : (
-            '🔍 Analisar NFSe'
+            'Analisar NFS-e'
           )}
         </button>
       </form>
@@ -267,12 +260,12 @@ export default function Sidebar({ isOpen, onToggle, onSubmit, isLoading, onNovaA
               setStatusLoading(false);
             }
           }}
-          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-700/50 text-slate-400 rounded-xl hover:bg-slate-700 hover:text-white hover:border-slate-500 transition-all text-xs border border-slate-600/50"
+          className="sidebar-status w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-transparent text-[#697875] rounded-sm hover:bg-[#e9efeb] hover:text-[#285f5c] transition-colors text-xs border border-[#d5dfda]"
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
           </svg>
-          📡 Monitor de APIs
+          Saúde do sistema
         </button>
       </div>
 
@@ -284,6 +277,6 @@ export default function Sidebar({ isOpen, onToggle, onSubmit, isLoading, onNovaA
         loading={statusLoading}
         isDiagnostico={true}
       />
-    </div>
+    </aside>
   );
 }

@@ -9,7 +9,7 @@ type DebugResult = {
   data?: unknown;
 };
 
-export default function DebugModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
+export default function DebugModal({ isOpen, onClose, embedded = false }: { isOpen: boolean; onClose: () => void; embedded?: boolean }) {
   const [results, setResults] = useState<DebugResult[]>([]);
   const [running, setRunning] = useState(false);
 
@@ -134,51 +134,54 @@ export default function DebugModal({ isOpen, onClose }: { isOpen: boolean; onClo
     setRunning(false);
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="w-[760px] max-h-[88vh] bg-slate-900 border border-slate-700 rounded-2xl flex flex-col overflow-hidden">
-        {/* Cabeçalho */}
-        <div className="px-4 py-3 border-b border-slate-700 bg-slate-800/50 flex items-center justify-between">
+  const content = (
+      <div className={`debug-modal-panel ${embedded ? 'w-full' : 'w-[760px]'} max-h-[88vh] bg-[#fbfcf8] text-[#293536] border border-[#ccd9d4] rounded-sm flex flex-col overflow-hidden shadow-[0_18px_60px_rgba(24,44,42,.2)]`}>
+        {!embedded && <div className="px-4 py-3 border-b border-[#dce3df] bg-[#f2f5f1] flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className="text-xl">🔍</span>
-            <h2 className="text-base font-semibold text-white">Diagnóstico Wiserule</h2>
+            <span className="h-5 w-[3px] bg-[#397b78]" aria-hidden="true" />
+            <h2 className="font-serif text-base font-medium">Diagnóstico Wiserule</h2>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-white text-xl leading-none">✕</button>
-        </div>
+          <button onClick={onClose} className="text-[#758582] hover:text-[#293536] text-xl leading-none">×</button>
+        </div>}
 
         {/* Corpo */}
-        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
-          <p className="text-xs text-slate-400">
+        <div className="debug-modal-body flex-1 overflow-y-auto px-4 py-3 space-y-3">
+          {!embedded && <p className="text-xs text-[#687875]">
             Este diagnóstico testa a conexão com o Worker, o encoding das respostas e o fluxo completo de análise.
             Cada teste mostra a resposta bruta para facilitar a identificação de problemas.
-          </p>
+          </p>}
 
           <button
             onClick={runDebug}
             disabled={running}
-            className="w-full py-2.5 bg-gradient-to-r from-amber-500 to-orange-600 text-white rounded-lg hover:from-amber-400 hover:to-orange-500 transition-all text-sm font-medium disabled:opacity-50"
+            className="w-full py-2.5 bg-[#397b78] text-white rounded-sm hover:bg-[#2d6865] transition-colors text-sm font-medium disabled:opacity-50"
           >
-            {running ? '⏳ Executando diagnóstico...' : '▶️ Executar diagnóstico completo'}
+            {running ? 'Executando diagnóstico...' : 'Executar diagnóstico completo'}
           </button>
 
           {results.map((r, i) => (
-            <div key={i} className={`rounded-lg border p-3 ${r.ok ? 'border-emerald-600 bg-emerald-950/20' : 'border-red-600 bg-red-950/20'}`}>
+            <div key={i} className={`rounded-sm border p-3 ${r.ok ? 'border-[#b9d5c8] bg-[#eef5ef]' : 'border-[#e1c6bf] bg-[#fbf0ec]'}`}>
               <div className="flex items-center gap-2">
-                <span className="text-lg">{r.ok ? '✅' : '❌'}</span>
-                <span className="text-sm font-semibold text-white">{r.label}</span>
+                <span className={`h-2 w-2 rounded-full ${r.ok ? 'bg-[#397b60]' : 'bg-[#a34e48]'}`} aria-hidden="true" />
+                <span className="text-sm font-semibold text-[#293536]">{r.label}</span>
               </div>
-              <pre className="text-[11px] text-slate-300 whitespace-pre-wrap mt-1">{r.detalle}</pre>
+              <pre className="text-[11px] text-[#53615e] whitespace-pre-wrap mt-1">{r.detalle}</pre>
             </div>
           ))}
 
           {running && (
-            <div className="flex items-center gap-2 text-slate-400 text-sm">
-              <span className="w-2 h-2 bg-amber-400 rounded-full animate-pulse" />
+            <div className="flex items-center gap-2 text-[#687875] text-sm">
+              <span className="w-2 h-2 bg-[#397b78] rounded-full animate-pulse" />
               Executando testes...
             </div>
           )}
         </div>
       </div>
+  );
+
+  return embedded ? content : (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      {content}
     </div>
   );
 }

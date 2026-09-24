@@ -4,7 +4,6 @@ import { useState, useRef, useEffect } from 'react';
 import ChatMessage from '@/components/ChatMessage';
 import ChatInput from '@/components/ChatInput';
 import Sidebar from '@/components/Sidebar';
-import DebugModal from '@/components/DebugModal';
 
 type Message = {
   id: string;
@@ -80,30 +79,19 @@ export default function Home() {
     {
       id: 'welcome',
       role: 'assistant',
-      content: `# 🤖 Bem-vindo ao Wiserule!
-
-Sou um assistente especializado em análise de Notas Fiscais de Serviço. Posso ajudar você a:
-
-- 📋 **Analisar retenções fiscais** (ISS, IRRF, CSLL, COFINS, PIS)
-- 🏢 **Consultar dados da empresa** via CNPJ
-- ⚖️ **Verificar legislação aplicável** (LC 116/2003, leis municipais)
-- 📄 **Extrair dados de NFSe** de imagens ou PDFs
-- 💬 **Opiniões e discussões** da comunidade técnica
-
-**Como usar:**
-1. Preencha os dados no formulário ao lado (CNPJ, serviço, valor, cidade)
-2. Ou simplesmente digite em linguagem natural
-3. Ou anexe uma imagem/PDF da NFSe
-
-👉 Vamos começar?`,
+      content: [
+        '# Olá. Vamos à regra certa.',
+        '',
+        'Uma leitura cuidadosa da NFS-e faz diferença. Envie o documento para conferir os dados, consultar o cadastro do prestador pelo CNPJ e organizar a análise de ISS e retenções.',
+        '',
+        '**Comece por aqui:** anexe uma nota em PDF ou imagem, ou informe CNPJ, serviço, valor e município. Você revisará os dados extraídos antes de iniciar a análise.',
+      ].join('\n'),
       timestamp: new Date(),
     },
   ]);
 
   const [isLoading, setIsLoading] = useState(false);
   const [statusMsg, setStatusMsg] = useState('');
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [debugOpen, setDebugOpen] = useState(false);
   const [revisaoOcr, setRevisaoOcr] = useState<RevisaoOcr | null>(null);
   const [revisaoCampoIndex, setRevisaoCampoIndex] = useState<number | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -572,78 +560,88 @@ Sou um assistente especializado em análise de Notas Fiscais de Serviço. Posso 
       {
         id: 'welcome-' + Date.now(),
         role: 'assistant',
-        content: `# 🤖 Pronto para uma nova análise!
-
-Envie os dados da NFSe que desejo ajudar.`,
+        content: [
+          '# Nova análise',
+          '',
+          'Envie uma NFS-e ou informe os dados da operação para começar.',
+          '',
+          '**Comece por aqui:** anexe uma nota em PDF ou imagem, ou informe CNPJ, serviço, valor e município.',
+        ].join('\n'),
         timestamp: new Date(),
       },
     ]);
   };
 
   return (
-    <div className="flex h-screen bg-slate-900">
+    <div className="flex h-screen overflow-hidden bg-[#f3f4ef]">
       {/* Sidebar */}
       <Sidebar
-        isOpen={sidebarOpen}
-        onToggle={() => setSidebarOpen(!sidebarOpen)}
         onSubmit={enviarParaAnalise}
         isLoading={isLoading}
         onNovaAnalise={handleNovaAnalise}
       />
 
       {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="chat-main-area flex-1 flex flex-col min-w-0">
         {/* Header */}
-        <header className="flex items-center gap-3 px-6 py-4 border-b border-slate-700 bg-slate-800/50 backdrop-blur-sm">
-          <button
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="text-slate-400 hover:text-white transition-colors"
-            title="Toggle sidebar"
-          >
-            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-          </button>
-          <div className="flex items-center gap-2">
-            <span className="text-2xl">🤖</span>
-            <h1 className="text-lg font-semibold text-white">Wiserule</h1>
+        <header className="chat-topbar flex items-center gap-3 px-6 py-4 border-b">
+          <div className="flex items-center gap-3">
+            <span className="h-7 w-[2px] bg-[#d4a45c]" aria-hidden="true" />
+            <div>
+              <h1 className="text-sm font-semibold tracking-wide text-[#f0f1f3]">Análise fiscal</h1>
+              <p className="mt-0.5 text-[9px] uppercase tracking-[.16em] text-[#818b99]">Documentos · NFS-e · retenções</p>
+            </div>
           </div>
-          <span className="text-xs text-slate-500 bg-slate-700 px-2 py-0.5 rounded-full ml-2">
-            Análise Fiscal Inteligente
-          </span>
 
-          {/* Debug Button */}
-          <button
-            onClick={() => setDebugOpen(true)}
-            className="ml-auto text-xs text-amber-400 bg-slate-700/50 px-3 py-1.5 rounded-lg hover:bg-slate-700 hover:text-amber-300 transition-all border border-slate-600/50"
-            title="Abrir debug"
-          >
-            🔍 Debug
-          </button>
+          <span className="ml-auto hidden items-center gap-2 text-[10px] uppercase tracking-[.13em] text-[#77818f] sm:flex">
+            <span className="h-1.5 w-1.5 rounded-full bg-[#d4a45c]" />
+            Wiserule · fiscal
+          </span>
         </header>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto px-4 py-6 space-y-4">
-          {messages.map((msg) => (
-            <ChatMessage key={msg.id} message={msg} />
-          ))}
+        <div className="chat-scroll flex-1 overflow-y-auto px-4 py-6 space-y-4">
+          {messages.map((msg) => msg.id.startsWith('welcome') ? (
+            <section key={msg.id} className="welcome-card max-w-3xl px-7 py-8 sm:px-10 sm:py-10">
+              <div className="relative z-[1]">
+                <div className="welcome-kicker mb-5 flex items-center gap-3 text-[10px] font-semibold uppercase tracking-[.2em]">
+                  <span className="welcome-rule" />
+                  Inteligência fiscal · NFS-e
+                </div>
+                <h2 className="welcome-title max-w-2xl text-3xl sm:text-[2.65rem] leading-[1.12]">A regra certa começa com uma boa leitura.</h2>
+                <p className="mt-5 max-w-2xl text-[15px] leading-7 text-[#51655d]">{msg.content.split('\n\n').slice(1, 2)[0]}</p>
+                <p className="mt-3 max-w-2xl text-sm leading-6 text-[#697a71]"><strong className="font-semibold text-[#304e45]">Comece por aqui:</strong> {msg.content.split('\n\n').slice(2).join(' ').replace(/^\*\*Comece por aqui:\*\*\s*/, '')}</p>
+                <div className="mt-8 grid max-w-2xl gap-3 border-t border-[#cfdbd0] pt-5 sm:grid-cols-3">
+                  {[
+                    ['01', 'Leia a nota', 'PDF ou imagem'],
+                    ['02', 'Confira os dados', 'Você valida a extração'],
+                    ['03', 'Entenda a regra', 'ISS e retenções'],
+                  ].map(([numero, titulo, apoio]) => (
+                    <div key={numero} className="welcome-feature pt-3">
+                      <span className="block text-[10px] font-semibold tracking-[.12em] text-[#bd9657]">{numero}</span>
+                      <span className="mt-1 block text-xs font-semibold text-[#304e45]">{titulo}</span>
+                      <span className="mt-1 block text-[11px] text-[#7a8980]">{apoio}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </section>
+          ) : <ChatMessage key={msg.id} message={msg} />)}
 
           {isLoading && (
             <div className="flex items-start gap-3">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-sm flex-shrink-0">
-                🤖
-              </div>
-              <div className="bg-slate-800 rounded-2xl rounded-tl-sm px-5 py-3 border border-slate-700 max-w-md">
+              <div className="mt-1 h-5 w-[3px] bg-[#397b78] flex-shrink-0" aria-hidden="true" />
+              <div className="loading-card bg-[#e3eeea] rounded-[3px] px-5 py-3 border border-[#d6e4df] max-w-md text-[#293736]">
                 <div className="flex items-center gap-2 mb-1">
                   <div className="flex gap-1">
-                    <span className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                    <span className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                    <span className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                    <span className="w-1.5 h-1.5 bg-[#397b78] rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                    <span className="w-1.5 h-1.5 bg-[#397b78] rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                    <span className="w-1.5 h-1.5 bg-[#397b78] rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
                   </div>
-                  <span className="text-sm text-slate-400 ml-2">Analisando...</span>
+                  <span className="text-sm text-[#637471] ml-2">Analisando...</span>
                 </div>
                 {statusMsg && (
-                  <div className="text-xs text-slate-500 mt-1 border-t border-slate-700 pt-1">
+                  <div className="text-xs text-[#758582] mt-1 border-t border-[#cfddd8] pt-1">
                     {statusMsg}
                   </div>
                 )}
@@ -661,23 +659,17 @@ Envie os dados da NFSe que desejo ajudar.`,
         />
       </div>
 
-      {/* Debug Modal */}
-      <DebugModal
-        isOpen={debugOpen}
-        onClose={() => setDebugOpen(false)}
-      />
-
       {revisaoOcr && revisaoCampoIndex === null && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <section className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl border border-slate-600 bg-slate-900 p-6 shadow-2xl" aria-labelledby="ocr-review-title">
-            <h2 id="ocr-review-title" className="text-xl font-semibold text-white">Conferir dados da NFSe</h2>
-            <p className="mt-2 text-sm text-amber-300">A leitura automática pode errar. Compare cada campo com o PDF/imagem original; a análise só começa após sua confirmação.</p>
-            <a href={revisaoOcr.urlOriginal} target="_blank" rel="noreferrer" className="mt-2 inline-flex text-sm text-blue-300 underline">Abrir arquivo original: {revisaoOcr.arquivo.name}</a>
-            <p className="mt-1 text-xs text-slate-400">Confiabilidade da extração: <span className={`font-semibold ${nivelConfiabilidade(revisaoOcr).cor}`}>{nivelConfiabilidade(revisaoOcr).rotulo}</span></p>
-            {revisaoOcr.erros.length > 0 && <p className="mt-2 text-xs text-amber-200">Observações: {revisaoOcr.erros.join('; ')}</p>}
-            {revisaoOcr.texto.trim() && <details className="mt-3 rounded-lg border border-slate-700 bg-slate-800/60 p-3">
-              <summary className="cursor-pointer text-sm text-blue-200">Ver texto reconhecido pelo OCR</summary>
-              <pre className="mt-3 max-h-48 overflow-auto whitespace-pre-wrap text-xs text-slate-300">{revisaoOcr.texto}</pre>
+          <section className="review-modal w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-sm border border-[#ccd9d4] bg-[#fbfcf8] p-6 text-[#293536] shadow-[0_18px_60px_rgba(24,44,42,.2)]" aria-labelledby="ocr-review-title">
+            <h2 id="ocr-review-title" className="font-serif text-xl font-medium">Conferir dados da NFSe</h2>
+            <p className="mt-2 text-sm text-[#85672f]">A leitura automática pode errar. Compare cada campo com o PDF/imagem original; a análise só começa após sua confirmação.</p>
+            <a href={revisaoOcr.urlOriginal} target="_blank" rel="noreferrer" className="mt-2 inline-flex text-sm text-[#397b78] underline">Abrir arquivo original: {revisaoOcr.arquivo.name}</a>
+            <p className="mt-1 text-xs text-[#758182]">Confiabilidade da extração: <span className={`font-semibold ${nivelConfiabilidade(revisaoOcr).cor}`}>{nivelConfiabilidade(revisaoOcr).rotulo}</span></p>
+            {revisaoOcr.erros.length > 0 && <p className="mt-2 text-xs text-[#85672f]">Observações: {revisaoOcr.erros.join('; ')}</p>}
+            {revisaoOcr.texto.trim() && <details className="mt-3 rounded-sm border border-[#dce3df] bg-[#f2f5f1] p-3">
+              <summary className="cursor-pointer text-sm text-[#397b78]">Ver texto reconhecido pelo OCR</summary>
+              <pre className="mt-3 max-h-48 overflow-auto whitespace-pre-wrap text-xs text-[#53615e]">{revisaoOcr.texto}</pre>
             </details>}
             <div className="mt-5 grid gap-4 sm:grid-cols-2">
               {([
@@ -687,20 +679,20 @@ Envie os dados da NFSe que desejo ajudar.`,
                 ['cidade', revisaoOcr.cidadeUfManual ? 'Município da prestação (manual)' : 'Município da prestação'],
                 ['uf', revisaoOcr.cidadeUfManual ? 'UF (manual)' : 'UF'],
               ] as const).map(([campo, rotulo]) => (
-                <label key={campo} className="text-sm text-slate-300">
-                  {rotulo}{revisaoOcr.divergencias.includes(campo) && <span className="ml-2 text-amber-300">— divergência</span>}
+                <label key={campo} className="text-sm text-[#53615e]">
+                  {rotulo}{revisaoOcr.divergencias.includes(campo) && <span className="ml-2 text-[#a36e27]">— divergência</span>}
                   <input
                     value={revisaoOcr[campo]}
                     onChange={(event) => setRevisaoOcr((prev) => prev ? { ...prev, [campo]: event.target.value, confirmouConferencia: false } : prev)}
-                    className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-white focus:border-blue-500 focus:outline-none"
+                    className="mt-1 w-full rounded-sm border border-[#cbd8d3] bg-white px-3 py-2 text-[#273234] focus:border-[#397b78] focus:outline-none"
                   />
                 </label>
               ))}
-              {revisaoOcr.cidadeUfManual && <p className="sm:col-span-2 text-xs text-slate-400">Município e UF vieram preenchidos manualmente no formulário; confira-os no documento, pois determinam regras tributárias locais.</p>}
+              {revisaoOcr.cidadeUfManual && <p className="sm:col-span-2 text-xs text-[#758182]">Município e UF vieram preenchidos manualmente no formulário; confira-os no documento, pois determinam regras tributárias locais.</p>}
             </div>
-            <div className="mt-6 border-t border-slate-700 pt-5">
-              <h3 className="text-sm font-semibold text-white">Outros dados fiscais extraídos</h3>
-              <p className="mt-1 text-xs text-slate-400">São declarações/transcrições da nota, não confirmação cadastral. Revise e corrija conforme o original; campos vazios não foram identificados.</p>
+            <div className="mt-6 border-t border-[#dce3df] pt-5">
+              <h3 className="text-sm font-semibold text-[#293536]">Outros dados fiscais extraídos</h3>
+              <p className="mt-1 text-xs text-[#758182]">São declarações/transcrições da nota, não confirmação cadastral. Revise e corrija conforme o original; campos vazios não foram identificados.</p>
               <div className="mt-4 grid gap-4 sm:grid-cols-2">
                 {([
                   ['cnpj_tomador', 'CNPJ do tomador'],
@@ -713,25 +705,25 @@ Envie os dados da NFSe que desejo ajudar.`,
                   ['data_emissao', 'Data de emissão'],
                   ['simples_nacional_nfse', 'Simples Nacional declarado na nota'],
                 ] as const).map(([campo, rotulo]) => (
-                  <label key={campo} className="text-sm text-slate-300">
+                  <label key={campo} className="text-sm text-[#53615e]">
                     {rotulo}
                     <input
                       value={revisaoOcr[campo]}
                       onChange={(event) => setRevisaoOcr((prev) => prev ? { ...prev, [campo]: event.target.value, confirmouConferencia: false } : prev)}
-                      className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-white focus:border-blue-500 focus:outline-none"
+                      className="mt-1 w-full rounded-sm border border-[#cbd8d3] bg-white px-3 py-2 text-[#273234] focus:border-[#397b78] focus:outline-none"
                     />
                   </label>
                 ))}
-                <label className="flex items-center gap-2 text-sm text-slate-300">
-                  <input type="checkbox" checked={revisaoOcr.mei_nfse} onChange={(event) => setRevisaoOcr((prev) => prev ? { ...prev, mei_nfse: event.target.checked, confirmouConferencia: false } : prev)} className="accent-emerald-500" />
+                <label className="flex items-center gap-2 text-sm text-[#53615e]">
+                  <input type="checkbox" checked={revisaoOcr.mei_nfse} onChange={(event) => setRevisaoOcr((prev) => prev ? { ...prev, mei_nfse: event.target.checked, confirmouConferencia: false } : prev)} className="accent-[#397b78]" />
                   NFSe declara prestador como MEI
                 </label>
               </div>
-              {revisaoOcr.camposPerguntar.length > 0 && <p className="mt-3 text-xs text-amber-200">Campos que a extração marcou para conferência: {revisaoOcr.camposPerguntar.join(', ')}. Compare-os com atenção antes da confirmação.</p>}
+              {revisaoOcr.camposPerguntar.length > 0 && <p className="mt-3 text-xs text-[#85672f]">Campos que a extração marcou para conferência: {revisaoOcr.camposPerguntar.join(', ')}. Compare-os com atenção antes da confirmação.</p>}
             </div>
             <div className="mt-6 flex flex-wrap justify-end gap-3">
-              <button onClick={() => { URL.revokeObjectURL(revisaoOcr.urlOriginal); setRevisaoOcr(null); setRevisaoCampoIndex(null); }} disabled={isLoading} className="rounded-lg border border-slate-600 px-4 py-2 text-slate-200">Cancelar</button>
-              <button onClick={confirmarRevisaoOcr} disabled={isLoading} className="rounded-lg bg-emerald-600 px-4 py-2 font-medium text-white disabled:opacity-50">Confirmar e iniciar análise</button>
+              <button onClick={() => { URL.revokeObjectURL(revisaoOcr.urlOriginal); setRevisaoOcr(null); setRevisaoCampoIndex(null); }} disabled={isLoading} className="rounded-sm border border-[#cbd8d3] px-4 py-2 text-[#53615e] hover:bg-[#f0f4f1]">Cancelar</button>
+              <button onClick={confirmarRevisaoOcr} disabled={isLoading} className="rounded-sm bg-[#397b78] px-4 py-2 font-medium text-white hover:bg-[#2d6865] disabled:opacity-50">Confirmar e iniciar análise</button>
             </div>
           </section>
         </div>
@@ -747,7 +739,7 @@ Envie os dados da NFSe que desejo ajudar.`,
               setRevisaoCampoIndex(null);
               addMessage('assistant', 'Revisão cancelada. Nenhuma análise foi iniciada.');
             }}
-            className="rounded-lg border border-slate-500 bg-slate-800 px-3 py-2 text-sm text-slate-200 shadow-lg hover:bg-slate-700"
+            className="rounded-sm border border-[#bdcbc6] bg-[#fbfcf8] px-3 py-2 text-sm text-[#53615e] shadow-lg hover:bg-[#e9efeb]"
           >
             Cancelar revisão da NFSe
           </button>

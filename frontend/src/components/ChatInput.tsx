@@ -48,12 +48,12 @@ export default function ChatInput({ onSend, isLoading }: ChatInputProps) {
   };
 
   return (
-    <div className="border-t border-slate-700 bg-slate-800/50 backdrop-blur-sm px-4 py-4">
+    <div className="chat-composer border-t px-4 py-4">
       {/* File preview */}
       {selectedFile && (
-        <div className="flex items-center gap-2 mb-3 px-3 py-2 bg-slate-700/50 rounded-lg max-w-fit">
-          <span className="text-lg">📎</span>
-          <span className="text-sm text-slate-300 truncate max-w-[200px]">
+        <div className="flex items-center gap-2 mb-3 px-3 py-2 bg-white border border-[#dce3df] rounded-sm max-w-fit">
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-[#397b78]">Arquivo</span>
+          <span className="text-sm text-[#3c4848] truncate max-w-[200px]">
             {selectedFile.name}
           </span>
           <span className="text-xs text-slate-500">
@@ -64,7 +64,7 @@ export default function ChatInput({ onSend, isLoading }: ChatInputProps) {
               setSelectedFile(null);
               if (fileInputRef.current) fileInputRef.current.value = '';
             }}
-            className="text-slate-400 hover:text-red-400 ml-2"
+            className="text-[#758182] hover:text-red-700 ml-2"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -74,12 +74,12 @@ export default function ChatInput({ onSend, isLoading }: ChatInputProps) {
       )}
 
       {/* Input row */}
-      <div className="flex items-end gap-3 max-w-4xl mx-auto">
+      <div className="flex items-end gap-2 max-w-4xl mx-auto border border-[#bfcfca] bg-[#fbfcf8] p-2 shadow-[0_3px_12px_rgba(31,52,50,.04)] focus-within:border-[#588c85]">
         {/* File upload button */}
         <button
           onClick={() => fileInputRef.current?.click()}
           disabled={isLoading}
-          className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors disabled:opacity-50"
+          className="p-2 text-[#71817e] hover:text-[#285f5c] hover:bg-[#e9f0ed] rounded-sm transition-colors disabled:opacity-50"
           title="Anexar NFSe (imagem ou PDF)"
         >
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -103,7 +103,7 @@ export default function ChatInput({ onSend, isLoading }: ChatInputProps) {
             placeholder="Digite os dados da NFSe ou faça uma pergunta..."
             rows={1}
             disabled={isLoading}
-            className="w-full bg-slate-700 text-white placeholder-slate-400 rounded-xl px-4 py-3 pr-12 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 border border-slate-600 disabled:opacity-50"
+            className="w-full bg-transparent text-[#273234] placeholder-[#8b9794] px-3 py-2.5 resize-none focus:outline-none disabled:opacity-50"
             style={{ minHeight: '44px', maxHeight: '120px' }}
             onInput={(e) => {
               const el = e.currentTarget;
@@ -117,7 +117,7 @@ export default function ChatInput({ onSend, isLoading }: ChatInputProps) {
         <button
           onClick={handleSubmit}
           disabled={isLoading || (!input.trim() && !selectedFile)}
-          className="p-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl hover:from-blue-500 hover:to-blue-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-blue-500/20"
+          className="min-w-20 px-4 py-2.5 bg-[#397b78] text-white rounded-sm hover:bg-[#2d6865] transition-colors disabled:opacity-45 disabled:cursor-not-allowed"
           title="Enviar"
         >
           {isLoading ? (
@@ -126,15 +126,13 @@ export default function ChatInput({ onSend, isLoading }: ChatInputProps) {
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
             </svg>
           ) : (
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-            </svg>
+            <span className="text-sm tracking-wide">Enviar</span>
           )}
         </button>
       </div>
 
       {/* Footer disclaimer */}
-      <p className="text-[10px] text-slate-600 text-center mt-3 max-w-4xl mx-auto">
+      <p className="text-[10px] text-[#899491] text-center mt-3 max-w-4xl mx-auto">
         As informações geradas são de caráter analítico e não constituem aconselhamento jurídico oficial.
         Consulte um profissional habilitado para tomada de decisão.
       </p>
