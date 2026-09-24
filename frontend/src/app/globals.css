@@ -142,10 +142,9 @@ button { cursor: pointer; }
 .chat-topbar > span { color: #969eaa; border-color: #303a49; }
 .chat-topbar button[title="Abrir debug"] { color: #aeb4bd; border-color: #303a49; }
 .chat-topbar button[title="Abrir debug"]:hover { background: #151e2b; color: #d4a45c; }
-.chat-scroll {
+.chat-main-area {
   position: relative;
   isolation: isolate;
-  overflow-x: hidden;
   background-color: #080d17;
   background-image:
     radial-gradient(ellipse at 18% 24%, rgba(34,105,139,.42), transparent 42%),
@@ -154,6 +153,12 @@ button { cursor: pointer; }
   background-size: 180% 180%, 170% 170%, 190% 190%;
   background-position: 0% 0%, 100% 0%, 50% 100%;
   animation: wiserule-ambient-drift 18s ease-in-out infinite alternate;
+}
+.chat-scroll {
+  position: relative;
+  isolation: isolate;
+  overflow-x: hidden;
+  background: transparent;
 }
 .chat-scroll::before {
   content: '';
@@ -179,7 +184,7 @@ button { cursor: pointer; }
   0% { opacity: .06; background-position: 0 0; }
   100% { opacity: .14; background-position: 72px 72px; }
 }
-.chat-composer { position: relative; z-index: 2; border: 0; background: transparent !important; }
+.chat-composer { position: relative; z-index: 2; flex: 0 0 auto; border: 0; background: transparent !important; }
 .composer-inner { width: 100%; max-width: 880px; margin: 0 auto; }
 .composer-box { padding: .5rem .65rem .55rem; border: 1px solid #394557; border-radius: 15px; background: linear-gradient(145deg, rgba(19,28,42,.98), rgba(13,20,32,.98)); box-shadow: 0 12px 36px rgba(0,0,0,.22), inset 0 1px rgba(255,255,255,.025); transition: border-color .2s ease, box-shadow .2s ease, transform .2s ease; }
 .composer-box:focus-within { border-color: rgba(212,164,92,.72); box-shadow: 0 0 0 3px rgba(212,164,92,.09), 0 14px 40px rgba(0,0,0,.26); }
@@ -284,7 +289,7 @@ button { cursor: pointer; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .chat-scroll { animation: none; }
+  .chat-main-area { animation: none; }
   .chat-scroll::before { animation: none; }
   .welcome-prompt { transition: none; }
   .composer-box, .composer-attach, .composer-send { transition: none; }
