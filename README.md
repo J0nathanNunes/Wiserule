@@ -70,6 +70,12 @@ MinhaReceita  LegisWeb   Tavily/Brave
   npm run db:migrate:auth:remote
   ```
 
+  Se o login já estiver em uso, aplique também a migração da central de notificações:
+
+  ```bash
+  npm run db:migrate:notifications:remote
+  ```
+
 2. Configure um segredo temporário e exclusivo para provisionar o primeiro administrador:
 
   ```bash
@@ -83,7 +89,7 @@ MinhaReceita  LegisWeb   Tavily/Brave
   npx wrangler secret delete AUTH_BOOTSTRAP_SECRET
   ```
 
-Novos cadastros entram como **pendentes** e não recebem sessão. Um administrador aprova ou recusa cada solicitação em **Gerenciar usuários** e pode conceder/remover o papel administrativo. As sessões usam cookies `HttpOnly`, `Secure` e `SameSite=None`; as senhas são armazenadas com PBKDF2-SHA-256 e sal aleatório. A Pages Function `frontend/functions/api/[[path]].ts` encaminha `/api/*` ao Worker e mantém as respostas, inclusive os cookies de sessão, no domínio do Pages. No Cloudflare Pages, configure a pasta `frontend` como diretório raiz, `npm run build` como comando de compilação e `out` como diretório de saída. Para desenvolvimento local, configure `NEXT_PUBLIC_API_URL` apontando para o Worker, habilite `http://localhost:3000` em `CORS_ORIGINS`, configure `AUTH_BOOTSTRAP_SECRET` como segredo local do Wrangler e aplique a migração ao banco local.
+Novos cadastros entram como **pendentes** e não recebem sessão. Um administrador aprova ou recusa cada solicitação em **Gerenciar usuários** e pode conceder/remover o papel administrativo. O rodapé da barra lateral apresenta perfil e notificações; o histórico guarda pedidos de acesso, decisões e erros de servidor por usuário, com indicador de não lidas. As sessões usam cookies `HttpOnly`, `Secure` e `SameSite=None`; as senhas são armazenadas com PBKDF2-SHA-256 e sal aleatório. A Pages Function `frontend/functions/api/[[path]].ts` encaminha `/api/*` ao Worker e mantém as respostas, inclusive os cookies de sessão, no domínio do Pages. No Cloudflare Pages, configure a pasta `frontend` como diretório raiz, `npm run build` como comando de compilação e `out` como diretório de saída. Para desenvolvimento local, configure `NEXT_PUBLIC_API_URL` apontando para o Worker, habilite `http://localhost:3000` em `CORS_ORIGINS`, configure `AUTH_BOOTSTRAP_SECRET` como segredo local do Wrangler e aplique as migrações ao banco local.
 
 ### 1. Clone o repositório
 

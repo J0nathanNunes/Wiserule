@@ -98,6 +98,13 @@ function arquivoCorrespondeExtensao(bytes: Uint8Array, extensao: string): boolea
 
 const app = new Hono<{ Bindings: Env; Variables: { usuario: UsuarioAutenticado } }>();
 
+async function notificarAdministradores(db: D1Database, tipo: 'acesso' | 'erro' | 'sistema', titulo: string, mensagem: string): Promise<void> {
+  await db.prepare(
+    `INSERT INTO notificacoes_usuario (usuario_id, tipo, titulo, mensagem)
+     SELECT id, ?, ?, ? FROM usuarios WHERE papel = 'admin' AND status = 'ativo'`,
+  ).bind(tipo, titulo, mensagem.slice(0, 500)).run();
+}
+
 // CORS
 app.use(
   '/api/*',
@@ -159,7 +166,32 @@ app.use('/api/*', async (c, next) => {
   }
 
   c.set('usuario', usuario);
-  return next();
+  await next();
+  if (c.res.status >= 500 && c.env.DB && c.env.DB.prepare) {
+    const caminho = new URL(c.req.url).pathname;
+    c.executionCtx.waitUntil((async () => {
+      try {
+        await c.env.DB.prepare(
+          `INSERT INTO notificacoes_usuario (usuario_id, tipo, titulo, mensagem)
+           SELECT id, 'erro', 'Falha no sistema', ? FROM usuarios WHERE status = 'ativo' AND (id = ? OR papel = 'admin')`,
+        ).bind(`A solicitação ${c.req.method} ${caminho} falhou no servidor.`, usuario.id).run();
+      } catch (e) {
+        console.error('[AUTH] Falha ao registrar erro como notificação:', e);
+      }
+    })());
+  }
+  return c.res;
+});
+
+app.onError((error, c) => {
+  console.error('[API] Erro não tratado:', error);
+  const usuario = c.get('usuario');
+  if (c.env.DB && usuario && c.env.DB.prepare) {
+    c.executionCtx.waitUntil(c.env.DB.prepare(
+      'INSERT INTO notificacoes_usuario (usuario_id, tipo, titulo, mensagem) VALUES (?, ?, ?, ?)',
+    ).bind(usuario.id, 'erro', 'Falha em uma operação', `A operação ${c.req.method} ${new URL(c.req.url).pathname} falhou. Tente novamente.`).run().catch((e) => console.error('[AUTH] Falha ao registrar notificação:', e)));
+  }
+  return c.json({ status: 'error', error: 'Ocorreu um erro inesperado. Tente novamente.' }, 500);
 });
 
 app.post('/api/auth/bootstrap', async (c) => {
@@ -267,6 +299,11 @@ app.post('/api/auth/cadastro', async (c) => {
   } catch {
     return c.json({ status: 'error', error: 'Já existe um cadastro com este e-mail.' }, 409);
   }
+  try {
+    await notificarAdministradores(c.env.DB, 'acesso', 'Nova solicitação de acesso', `${nome} (${email}) aguarda aprovação.`);
+  } catch (e) {
+    console.error('[AUTH] Falha ao notificar administradores sobre cadastro:', e);
+  }
   return c.json({ status: 'pendente', mensagem: 'Cadastro recebido. O acesso será liberado após aprovação por um administrador.' }, 201);
 });
 
@@ -333,6 +370,35 @@ app.get('/api/usuarios', async (c) => {
   return c.json({ status: 'sucesso', usuarios: usuarios.results || [] });
 });
 
+app.get('/api/notificacoes', async (c) => {
+  const usuarioId = c.get('usuario').id;
+  const [notificacoes, contagem] = await Promise.all([
+    c.env.DB.prepare(
+      `SELECT id, tipo, titulo, mensagem, lida, criado_em
+       FROM notificacoes_usuario WHERE usuario_id = ?
+       ORDER BY criado_em DESC LIMIT 100`,
+    ).bind(usuarioId).all(),
+    c.env.DB.prepare('SELECT COUNT(*) AS total FROM notificacoes_usuario WHERE usuario_id = ? AND lida = 0')
+      .bind(usuarioId).first<{ total: number }>(),
+  ]);
+  return c.json({ status: 'sucesso', notificacoes: notificacoes.results || [], nao_lidas: contagem?.total || 0 });
+});
+
+app.patch('/api/notificacoes/lidas', async (c) => {
+  await c.env.DB.prepare('UPDATE notificacoes_usuario SET lida = 1 WHERE usuario_id = ? AND lida = 0')
+    .bind(c.get('usuario').id).run();
+  return c.json({ status: 'sucesso' });
+});
+
+app.patch('/api/notificacoes/:id', async (c) => {
+  const id = Number(c.req.param('id'));
+  if (!Number.isInteger(id) || id < 1) return c.json({ status: 'error', error: 'Notificação inválida.' }, 400);
+  const resultado = await c.env.DB.prepare('UPDATE notificacoes_usuario SET lida = 1 WHERE id = ? AND usuario_id = ?')
+    .bind(id, c.get('usuario').id).run();
+  if (!resultado.meta.changes) return c.json({ status: 'error', error: 'Notificação não encontrada.' }, 404);
+  return c.json({ status: 'sucesso' });
+});
+
 app.patch('/api/usuarios/:id', async (c) => {
   const administrador = c.get('usuario');
   if (administrador.papel !== 'admin') return c.json({ status: 'error', error: 'Apenas administradores podem gerenciar usuários.' }, 403);
@@ -359,6 +425,16 @@ app.patch('/api/usuarios/:id', async (c) => {
   if (!resultado.meta.changes) return c.json({ status: 'error', error: 'Usuário não encontrado.' }, 404);
   if (body.status !== 'ativo') {
     await c.env.DB.prepare('DELETE FROM sessoes_usuario WHERE usuario_id = ?').bind(id).run();
+  }
+  try {
+    const alvo = await c.env.DB.prepare('SELECT email FROM usuarios WHERE id = ?').bind(id).first<{ email: string }>();
+    if (alvo) await c.env.DB.prepare(
+      `INSERT INTO notificacoes_usuario (usuario_id, tipo, titulo, mensagem)
+       VALUES (?, 'acesso', ?, ?)`,
+    ).bind(id, body.status === 'ativo' ? 'Acesso aprovado' : 'Solicitação de acesso recusada',
+      body.status === 'ativo' ? 'Seu acesso ao Wiserule foi liberado.' : 'Sua solicitação não foi aprovada. Se necessário, fale com um administrador.').run();
+  } catch (e) {
+    console.error('[AUTH] Falha ao notificar usuário sobre a decisão de acesso:', e);
   }
   return c.json({ status: 'sucesso' });
 });

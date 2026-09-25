@@ -1,8 +1,9 @@
 'use client';
 
 import { FormEvent, ReactNode, useCallback, useEffect, useState } from 'react';
+import { AuthContext, AuthUser } from '@/contexts/AuthContext';
 
-type User = { id: string; nome: string; email: string; papel: 'admin' | 'usuario'; status: 'ativo' };
+type User = AuthUser;
 type UserRow = Omit<User, 'status'> & { status: 'ativo' | 'pendente' | 'recusado'; criado_em: string };
 type Props = { children: ReactNode };
 
@@ -134,17 +135,15 @@ export default function AuthShell({ children }: Props) {
   };
 
   return (
-    <>
+    <AuthContext.Provider value={{
+      user,
+      signOut: sair,
+      openUserManagement: () => { setError(''); setAdminOpen(true); },
+    }}>
+      <>
       <div className="auth-app" inert={!user}>
         {children}
       </div>
-      {!checking && user && (
-        <div className="auth-userbar">
-          {user.papel === 'admin' && <button type="button" onClick={() => { setError(''); setAdminOpen(true); }} className="auth-userbar-button">Gerenciar usuários</button>}
-          <span className="auth-user-name">{user.nome}</span>
-          <button type="button" onClick={sair} className="auth-userbar-button">Sair</button>
-        </div>
-      )}
       {(checking || !user) && (
         <div className="auth-screen" role="dialog" aria-modal="true" aria-labelledby="auth-title">
           <div className="auth-orbit auth-orbit-one" aria-hidden="true" />
@@ -202,6 +201,7 @@ export default function AuthShell({ children }: Props) {
           </section>
         </div>
       )}
-    </>
+      </>
+    </AuthContext.Provider>
   );
 }

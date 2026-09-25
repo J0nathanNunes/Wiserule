@@ -2,6 +2,8 @@
 
 import { useState } from 'react';
 import StatusModal from './StatusModal';
+import NotificationCenter from './NotificationCenter';
+import { useAuth } from '@/contexts/AuthContext';
 
 type FormData = {
   cnpj: string;
@@ -18,6 +20,7 @@ type SidebarProps = {
 };
 
 export default function Sidebar({ onSubmit, isLoading, onNovaAnalise }: SidebarProps) {
+  const { user, signOut, openUserManagement } = useAuth();
   const [formData, setFormData] = useState<FormData>({
     cnpj: '',
     servico: '',
@@ -30,6 +33,7 @@ export default function Sidebar({ onSubmit, isLoading, onNovaAnalise }: SidebarP
   const [statusModalOpen, setStatusModalOpen] = useState(false);
   const [statusApis, setStatusApis] = useState<any>(null);
   const [statusLoading, setStatusLoading] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
 
   const handleChange = (field: keyof FormData, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -237,46 +241,34 @@ export default function Sidebar({ onSubmit, isLoading, onNovaAnalise }: SidebarP
         </button>
       </form>
 
-      {/* Status Button */}
-      <div className="p-4 border-t border-slate-700">
-        <button
-          onClick={async () => {
-            setStatusModalOpen(true);
-            setStatusLoading(true);
-            setStatusApis(null);
-            try {
-              const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || ''}/api/diagnostico`, { credentials: 'include' });
-              const data = await res.json();
-              setStatusApis(data);
-            } catch (err) {
-              setStatusApis({
-                apis: {
-                  backend: { nome: 'Backend Wiserule', status: 'offline', detalhe: 'Falha na conexão com o servidor', latencia_ms: null },
-                },
-                resumo: { total: 1, online: 0, offline: 1, erro: 0, nao_configurada: 0 },
-                timestamp: new Date().toISOString(),
-              });
-            } finally {
-              setStatusLoading(false);
-            }
-          }}
-          className="sidebar-status w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-transparent text-[#697875] rounded-sm hover:bg-[#e9efeb] hover:text-[#285f5c] transition-colors text-xs border border-[#d5dfda]"
-        >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-          </svg>
-          Saúde do sistema
-        </button>
+      <div className="sidebar-account-area">
+        <div className="sidebar-account-actions">
+          <NotificationCenter />
+          <div className="sidebar-profile-wrap">
+            <button type="button" className="sidebar-profile-trigger" onClick={() => setProfileOpen((open) => !open)} aria-expanded={profileOpen}>
+              <span className="sidebar-profile-avatar">{user?.nome.trim().charAt(0).toLocaleUpperCase('pt-BR') || 'U'}</span>
+              <span className="sidebar-profile-label"><strong>{user?.nome || 'Usuário'}</strong><small>{user?.papel === 'admin' ? 'Administrador' : 'Perfil'}</small></span>
+              <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 7.5 5 5 5-5" /></svg>
+            </button>
+            {profileOpen && <div className="sidebar-profile-menu" role="menu">
+              <div className="sidebar-profile-details"><strong>{user?.nome}</strong><span>{user?.email}</span><small>{user?.papel === 'admin' ? 'Administrador' : 'Usuário ativo'}</small></div>
+              <div className="sidebar-profile-divider" />
+              <button type="button" role="menuitem" onClick={async () => {
+                setProfileOpen(false); setStatusModalOpen(true); setStatusLoading(true); setStatusApis(null);
+                try {
+                  const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || ''}/api/diagnostico`, { credentials: 'include' });
+                  setStatusApis(await res.json());
+                } catch {
+                  setStatusApis({ apis: { backend: { nome: 'Backend Wiserule', status: 'offline', detalhe: 'Falha na conexão com o servidor' } }, resumo: { total: 1, online: 0, offline: 1, erro: 0, nao_configurada: 0 }, timestamp: new Date().toISOString() });
+                } finally { setStatusLoading(false); }
+              }}>Saúde do sistema</button>
+              {user?.papel === 'admin' && <button type="button" role="menuitem" onClick={() => { setProfileOpen(false); openUserManagement(); }}>Gerenciar usuários</button>}
+              <button type="button" role="menuitem" className="sidebar-signout" onClick={() => void signOut()}>Sair da conta</button>
+            </div>}
+          </div>
+        </div>
+        <StatusModal isOpen={statusModalOpen} onClose={() => setStatusModalOpen(false)} data={statusApis} loading={statusLoading} isDiagnostico={true} />
       </div>
-
-      {/* Status Modal */}
-      <StatusModal
-        isOpen={statusModalOpen}
-        onClose={() => setStatusModalOpen(false)}
-        data={statusApis}
-        loading={statusLoading}
-        isDiagnostico={true}
-      />
     </aside>
   );
 }
