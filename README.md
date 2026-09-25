@@ -83,7 +83,7 @@ MinhaReceita  LegisWeb   Tavily/Brave
   npx wrangler secret delete AUTH_BOOTSTRAP_SECRET
   ```
 
-Novos cadastros entram como **pendentes** e não recebem sessão. Um administrador aprova ou recusa cada solicitação em **Gerenciar usuários** e pode conceder/remover o papel administrativo. As sessões usam cookies `HttpOnly`, `Secure` e `SameSite=None`; as senhas são armazenadas com PBKDF2-SHA-256 e sal aleatório. O proxy de `/api/*` no Cloudflare Pages mantém o navegador no mesmo domínio da aplicação, necessário para que o cookie de sessão funcione sem depender de cookies de terceiros. Para desenvolvimento local, configure `NEXT_PUBLIC_API_URL` apontando para o Worker, habilite `http://localhost:3000` em `CORS_ORIGINS`, configure `AUTH_BOOTSTRAP_SECRET` como segredo local do Wrangler e aplique a migração ao banco local.
+Novos cadastros entram como **pendentes** e não recebem sessão. Um administrador aprova ou recusa cada solicitação em **Gerenciar usuários** e pode conceder/remover o papel administrativo. As sessões usam cookies `HttpOnly`, `Secure` e `SameSite=None`; as senhas são armazenadas com PBKDF2-SHA-256 e sal aleatório. A Pages Function `frontend/functions/api/[[path]].ts` encaminha `/api/*` ao Worker e mantém as respostas, inclusive os cookies de sessão, no domínio do Pages. No Cloudflare Pages, configure a pasta `frontend` como diretório raiz, `npm run build` como comando de compilação e `out` como diretório de saída. Para desenvolvimento local, configure `NEXT_PUBLIC_API_URL` apontando para o Worker, habilite `http://localhost:3000` em `CORS_ORIGINS`, configure `AUTH_BOOTSTRAP_SECRET` como segredo local do Wrangler e aplique a migração ao banco local.
 
 ### 1. Clone o repositório
 

@@ -32,6 +32,7 @@ export default function AuthShell({ children }: Props) {
   const [checking, setChecking] = useState(true);
   const [mode, setMode] = useState<'login' | 'cadastro' | 'bootstrap'>('login');
   const [bootstrapAvailable, setBootstrapAvailable] = useState(false);
+  const [apiAvailable, setApiAvailable] = useState(true);
   const [adminOpen, setAdminOpen] = useState(false);
   const [rows, setRows] = useState<UserRow[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
@@ -41,9 +42,11 @@ export default function AuthShell({ children }: Props) {
 
   const checkSession = useCallback(async () => {
     try {
-      const data = await request<{ usuario: User | null }>('/auth/sessao');
+      const data = await request<{ usuario: User | null }>('/auth/sessao')
+      setApiAvailable(true);
       setUser(data.usuario);
     } catch {
+      setApiAvailable(false);
       setUser(null);
     } finally {
       setChecking(false);
@@ -53,8 +56,8 @@ export default function AuthShell({ children }: Props) {
   useEffect(() => {
     void checkSession();
     void request<{ inicializacaoDisponivel: boolean }>('/auth/configuracao')
-      .then((data) => setBootstrapAvailable(data.inicializacaoDisponivel))
-      .catch(() => setBootstrapAvailable(false));
+      .then((data) => { setApiAvailable(true); setBootstrapAvailable(data.inicializacaoDisponivel); })
+      .catch(() => { setApiAvailable(false); setBootstrapAvailable(false); });
   }, [checkSession]);
 
   const carregarUsuarios = async () => {
@@ -153,6 +156,7 @@ export default function AuthShell({ children }: Props) {
                     <h1 id="auth-title">{mode === 'cadastro' ? 'Solicite seu acesso.' : mode === 'bootstrap' ? 'Configure o administrador.' : 'Bem-vindo de volta.'}</h1>
                     <p>{mode === 'cadastro' ? 'Crie seu cadastro. Um administrador precisará aprová-lo antes do primeiro acesso.' : mode === 'bootstrap' ? 'Crie a primeira conta administrativa com a chave de configuração fornecida pelo responsável técnico.' : 'Entre com seu e-mail e senha para continuar.'}</p>
                   </div>
+                    {!apiAvailable && <div className="auth-alert auth-alert-error" role="alert">Não foi possível acessar a API de autenticação neste endereço. A atualização do site ainda não foi publicada no Cloudflare Pages; atualize a implantação para que /api alcance o Worker.</div>}
                   <form className="auth-form" onSubmit={handleSubmit}>
                     {mode !== 'login' && <label>Nome completo<input name="nome" autoComplete="name" minLength={2} maxLength={100} placeholder="Como podemos chamar você?" required /></label>}
                     {mode === 'bootstrap' && <label>Chave de inicialização<input name="segredo" type="password" autoComplete="off" placeholder="Chave privada do administrador" required /></label>}
