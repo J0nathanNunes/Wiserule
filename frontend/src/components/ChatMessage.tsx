@@ -12,9 +12,18 @@ type MessageProps = {
   };
 };
 
+function normalizarMarkdown(texto: string): string {
+  const limpo = texto.replace(/\r\n?/g, '\n').trim();
+  // Alguns modelos envolvem o relatório inteiro em um bloco de código; nesse
+  // caso o Markdown é exibido como texto cru em vez de ser renderizado.
+  const bloco = limpo.match(/^```(?:markdown|md)?\s*\n([\s\S]*?)\n```$/i);
+  return (bloco ? bloco[1] : limpo).trim();
+}
+
 export default function ChatMessage({ message }: MessageProps) {
   const isUser = message.role === 'user';
-  const isReport = !isUser && /^#\s*Relatório|^##\s*📋/.test(message.content.trim());
+  const conteudo = isUser ? message.content : normalizarMarkdown(message.content);
+  const isReport = !isUser && /##\s*(?:📋\s*)?Dados da Empresa/i.test(conteudo);
 
   return (
     <div className={`chat-row ${isUser ? 'chat-row-user' : 'chat-row-assistant'}`}>
@@ -29,11 +38,11 @@ export default function ChatMessage({ message }: MessageProps) {
           <span className="chat-bubble-time">{message.timestamp.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
         </div>
         {isUser ? (
-          <p className="chat-bubble-text">{message.content}</p>
+          <p className="chat-bubble-text">{conteudo}</p>
         ) : (
           <div className={`markdown-body ${isReport ? 'report-body' : 'chat-bubble-text'}`}>
             <ReactMarkdown remarkPlugins={[remarkGfm]}>
-              {message.content}
+              {conteudo}
             </ReactMarkdown>
           </div>
         )}
