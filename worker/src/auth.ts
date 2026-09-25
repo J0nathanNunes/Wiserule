@@ -1,4 +1,5 @@
-const ITERACOES_HASH = 600_000;
+// Mantém o custo do PBKDF2 abaixo do limite de CPU por solicitação do Worker.
+const ITERACOES_HASH = 100_000;
 export const NOME_COOKIE_SESSAO = '__Host-wiserule_session';
 export const DURACAO_SESSAO_SEGUNDOS = 60 * 60 * 24 * 30;
 

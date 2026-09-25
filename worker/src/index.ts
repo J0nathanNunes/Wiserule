@@ -168,14 +168,21 @@ app.post('/api/auth/bootstrap', async (c) => {
 
   const body = await c.req.json<{ nome?: string; email?: string; senha?: string; segredo?: string }>().catch(() => null);
   const ip = c.req.header('CF-Connecting-IP') || 'desconhecido';
-  const tentativasBootstrap = await c.env.DB.prepare(
-    `SELECT COUNT(*) AS total FROM tentativas_login
-     WHERE email = ? AND tentada_em > datetime('now', '-15 minutes')`,
-  ).bind(`bootstrap:${ip}`).first<{ total: number }>();
-  if ((tentativasBootstrap?.total || 0) >= 5) {
-    return c.json({ status: 'error', error: 'Limite de tentativas atingido. Aguarde 15 minutos.' }, 429);
+  let tentativasBootstrap: { total: number } | null;
+  try {
+    tentativasBootstrap = await c.env.DB.prepare(
+      `SELECT COUNT(*) AS total FROM tentativas_login
+       WHERE email = ? AND tentada_em > datetime('now', '-15 minutes')`,
+    ).bind(`bootstrap:${ip}`).first<{ total: number }>();
+    if ((tentativasBootstrap?.total || 0) >= 5) {
+      return c.json({ status: 'error', error: 'Limite de tentativas atingido. Aguarde 15 minutos.' }, 429);
+    }
+    await c.env.DB.prepare('INSERT INTO tentativas_login (email, ip) VALUES (?, ?)').bind(`bootstrap:${ip}`, ip).run();
+    await c.env.DB.prepare("DELETE FROM tentativas_login WHERE tentada_em < datetime('now', '-1 day')").run();
+  } catch (e) {
+    console.error('[AUTH] Falha ao consultar limite de inicialização:', e);
+    return c.json({ status: 'error', error: 'Falha no banco ao preparar a inicialização administrativa. Confirme a migração da tabela tentativas_login.' }, 503);
   }
-  await c.env.DB.prepare('INSERT INTO tentativas_login (email, ip) VALUES (?, ?)').bind(`bootstrap:${ip}`, ip).run();
   const nome = body?.nome?.trim() || '';
   const email = body?.email?.trim().toLowerCase() || '';
   const senha = body?.senha || '';
@@ -186,10 +193,22 @@ app.post('/api/auth/bootstrap', async (c) => {
     return c.json({ status: 'error', error: 'Informe nome, e-mail válido e senha com pelo menos 12 caracteres.' }, 400);
   }
 
-  const admins = await c.env.DB.prepare("SELECT COUNT(*) AS total FROM usuarios WHERE papel = 'admin'").first<{ total: number }>();
+  let admins: { total: number } | null;
+  try {
+    admins = await c.env.DB.prepare("SELECT COUNT(*) AS total FROM usuarios WHERE papel = 'admin'").first<{ total: number }>();
+  } catch (e) {
+    console.error('[AUTH] Falha ao consultar administradores:', e);
+    return c.json({ status: 'error', error: 'Falha no banco ao verificar a conta administrativa. Confirme se a migração foi aplicada ao D1 vinculado ao Worker.' }, 503);
+  }
   if ((admins?.total || 0) > 0) return c.json({ status: 'error', error: 'A conta administrativa inicial já foi criada.' }, 409);
 
-  const credencial = await criarCredencialSenha(senha);
+  let credencial: Awaited<ReturnType<typeof criarCredencialSenha>>;
+  try {
+    credencial = await criarCredencialSenha(senha);
+  } catch (e) {
+    console.error('[AUTH] Falha ao gerar hash da senha:', e);
+    return c.json({ status: 'error', error: 'O Worker não conseguiu gerar o hash da senha. Verifique a compatibilidade do ambiente criptográfico.' }, 500);
+  }
   const id = idNovoUsuario();
   try {
     const resultado = await c.env.DB.prepare(
@@ -198,11 +217,18 @@ app.post('/api/auth/bootstrap', async (c) => {
        WHERE NOT EXISTS (SELECT 1 FROM usuarios WHERE papel = 'admin')`,
     ).bind(id, nome, email, credencial.hash, credencial.salt).run();
     if (!resultado.meta.changes) return c.json({ status: 'error', error: 'A conta administrativa inicial já foi criada.' }, 409);
-  } catch {
-    return c.json({ status: 'error', error: 'Não foi possível criar a conta. Confira se o e-mail já está cadastrado.' }, 409);
+  } catch (e) {
+    console.error('[AUTH] Falha ao inserir primeiro administrador:', e);
+    return c.json({ status: 'error', error: 'Não foi possível gravar a conta no D1. Verifique a tabela usuarios, os campos da migração e se o e-mail já está cadastrado.' }, 500);
   }
 
-  const token = await criarSessao(c.env.DB, id);
+  let token: string;
+  try {
+    token = await criarSessao(c.env.DB, id);
+  } catch (e) {
+    console.error('[AUTH] Conta criada, mas houve falha ao abrir sessão:', e);
+    return c.json({ status: 'sucesso', usuario: { id, nome, email, papel: 'admin', status: 'ativo' }, aviso: 'Conta criada. Entre novamente com e-mail e senha para abrir uma sessão.' }, 201);
+  }
   setCookie(c, NOME_COOKIE_SESSAO, token, opcoesCookieSessao);
   return c.json({ status: 'sucesso', usuario: { id, nome, email, papel: 'admin', status: 'ativo' } }, 201);
 });

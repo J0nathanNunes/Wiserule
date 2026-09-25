@@ -14,8 +14,14 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     credentials: 'include',
     headers: { ...(init?.headers || {}), ...(init?.body ? { 'Content-Type': 'application/json' } : {}) },
   });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.error || 'Não foi possível concluir a solicitação.');
+  const responseText = await response.text();
+  let data: { error?: string } = {};
+  try {
+    data = responseText ? JSON.parse(responseText) as { error?: string } : {};
+  } catch {
+    data.error = responseText.slice(0, 240);
+  }
+  if (!response.ok) throw new Error(data.error || `Falha na solicitação (HTTP ${response.status}).`);
   return data as T;
 }
 
