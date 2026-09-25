@@ -645,9 +645,11 @@ export default function Home() {
           ) : <ChatMessage key={msg.id} message={msg} />)}
 
           {isLoading && (
-            <div className="flex items-start gap-3">
-              <div className="mt-1 h-5 w-[3px] bg-[#397b78] flex-shrink-0" aria-hidden="true" />
-              <div className="loading-card bg-[#e3eeea] rounded-[3px] px-5 py-3 border border-[#d6e4df] max-w-md text-[#293736]">
+            <div className="chat-row chat-row-assistant">
+              <div className="chat-avatar" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 6h16M4 6v4h16M4 10v4h16M4 14v4h16" /></svg>
+              </div>
+              <div className="loading-card chat-bubble chat-bubble-assistant max-w-md">
                 <div className="flex items-center gap-2 mb-1">
                   <div className="flex gap-1">
                     <span className="w-1.5 h-1.5 bg-[#397b78] rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
