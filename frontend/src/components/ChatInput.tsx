@@ -40,21 +40,38 @@ export default function ChatInput({ onSend, isLoading, onCancel, suggestion }: C
     }
   };
 
+  const validarArquivo = (file: File): boolean => {
+    const allowedTypes = ['image/png', 'image/jpeg', 'application/pdf'];
+    if (!allowedTypes.includes(file.type) && !file.name.match(/\.(png|jpg|jpeg|pdf)$/i)) {
+      alert('Formato não suportado. Use PNG, JPG ou PDF.');
+      return false;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Arquivo muito grande. Máximo 5MB.');
+      return false;
+    }
+    return true;
+  };
+
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      // Valida tipo
-      const allowedTypes = ['image/png', 'image/jpeg', 'application/pdf'];
-      if (!allowedTypes.includes(file.type) && !file.name.match(/\.(png|jpg|jpeg|pdf)$/i)) {
-        alert('Formato não suportado. Use PNG, JPG ou PDF.');
-        return;
-      }
-      // Valida tamanho (5MB)
-      if (file.size > 5 * 1024 * 1024) {
-        alert('Arquivo muito grande. Máximo 5MB.');
-        return;
-      }
+    if (file && validarArquivo(file)) {
       setSelectedFile(file);
+    }
+  };
+
+  // Colar imagem capturada (print) direto no composer via Ctrl+V
+  const handlePaste = (e: React.ClipboardEvent) => {
+    const itens = Array.from(e.clipboardData?.items || []);
+    const itemImagem = itens.find((item) => item.type === 'image/png' || item.type === 'image/jpeg');
+    if (!itemImagem) return;
+    const arquivo = itemImagem.getAsFile();
+    if (!arquivo) return;
+    e.preventDefault();
+    const nome = arquivo.name && arquivo.name !== 'image.png' ? arquivo.name : `nfse-print-${Date.now()}.${itemImagem.type === 'image/jpeg' ? 'jpg' : 'png'}`;
+    const renomeado = new File([arquivo], nome, { type: itemImagem.type });
+    if (validarArquivo(renomeado)) {
+      setSelectedFile(renomeado);
     }
   };
 
@@ -79,7 +96,8 @@ export default function ChatInput({ onSend, isLoading, onCancel, suggestion }: C
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Escreva sua dúvida fiscal ou informe os dados da NFS-e..."
+            onPaste={handlePaste}
+            placeholder="Escreva sua dúvida fiscal ou cole um print da NFS-e (Ctrl+V)..."
             aria-label="Mensagem para análise fiscal"
             rows={1}
             disabled={isLoading}
