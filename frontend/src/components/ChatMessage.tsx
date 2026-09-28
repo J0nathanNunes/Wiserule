@@ -20,10 +20,27 @@ function normalizarMarkdown(texto: string): string {
   return (bloco ? bloco[1] : limpo).trim();
 }
 
+// Substitui emojis decorativos por marcadores tipográficos discretos, sem
+// aparência de ícones ilustrativos gerados por IA. O alvo ES5 do projeto não
+// aceita a flag "u" com intervalos unicode, então os símbolos são listados
+// diretamente por seus pontos de código.
+const EMOJIS_REMOVER = ['⏳', '✅', '❌', '📎', '📋', '🏢', '🛠️', '⚖️', '🧮', '📍', '🔢', '🧾', '💬', '⚠️'];
+
+function limparEmojis(texto: string): string {
+  let resultado = texto;
+  for (const emoji of EMOJIS_REMOVER) {
+    resultado = resultado.split(emoji).join('');
+  }
+  return resultado
+    .replace(/Atenção:\s*Atenção:/g, 'Atenção:')
+    .replace(/(^|\n)(\s*[-*•]\s*)\s+/g, '$1$2');
+}
+
 export default function ChatMessage({ message }: MessageProps) {
   const isUser = message.role === 'user';
-  const conteudo = isUser ? message.content : normalizarMarkdown(message.content);
-  const isReport = !isUser && /##\s*(?:📋\s*)?Dados da Empresa/i.test(conteudo);
+  const bruto = isUser ? message.content : normalizarMarkdown(message.content);
+  const conteudo = isUser ? bruto : limparEmojis(bruto);
+  const isReport = !isUser && /##\s*Dados da Empresa/i.test(conteudo);
 
   return (
     <div className={`chat-row ${isUser ? 'chat-row-user' : 'chat-row-assistant'}`}>

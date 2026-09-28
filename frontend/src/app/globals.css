@@ -134,8 +134,8 @@ button { cursor: pointer; }
 .chat-row-assistant { justify-content: flex-start; }
 .chat-avatar { display: none; }
 .chat-bubble { min-width: 0; max-width: 100%; padding: .7rem .9rem; border-radius: 14px; box-shadow: 0 6px 22px rgba(0,0,0,.18); }
-.chat-bubble-user { align-self: flex-end; background: linear-gradient(145deg, #1b2432, #141b28); border: 1px solid #2c3748; color: #eceef2; border-radius: 14px 14px 4px 14px; }
-.chat-bubble-assistant { flex: 0 1 auto; background: linear-gradient(145deg, #131f2e, #0f1826); border: 1px solid #2a3a4d; color: #e3e8e8; border-radius: 14px 14px 14px 4px; }
+.chat-bubble-user { align-self: flex-end; background: linear-gradient(145deg, #1b2432, #141b28); border: 1px solid #2c3748; color: #eceef2; border-radius: 14px; }
+.chat-bubble-assistant { flex: 0 1 auto; background: linear-gradient(145deg, #131f2e, #0f1826); border: 1px solid #2a3a4d; color: #e3e8e8; border-radius: 14px; }
 .chat-bubble-head { display: flex; align-items: center; justify-content: space-between; gap: .5rem; margin-bottom: .4rem; }
 .chat-bubble-head-user span:first-child { color: #d4a45c; font-size: .66rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
 .chat-bubble-head-assistant span:first-child { color: #c8a36b; font-size: .66rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
@@ -213,7 +213,7 @@ button { cursor: pointer; }
 }
 .chat-composer { position: relative; z-index: 2; flex: 0 0 auto; border: 0; background: transparent !important; }
 .composer-inner { width: 100%; max-width: 880px; margin: 0 auto; }
-.composer-box { padding: .5rem .65rem .55rem; border: 1px solid #394557; border-radius: 15px; background: linear-gradient(145deg, rgba(19,28,42,.98), rgba(13,20,32,.98)); box-shadow: 0 12px 36px rgba(0,0,0,.22), inset 0 1px rgba(255,255,255,.025); transition: border-color .2s ease, box-shadow .2s ease, transform .2s ease; }
+.composer-box { padding: .5rem .65rem .55rem; border: 1px solid #394557; border-radius: 14px; background: linear-gradient(145deg, rgba(19,28,42,.98), rgba(13,20,32,.98)); box-shadow: 0 12px 36px rgba(0,0,0,.22), inset 0 1px rgba(255,255,255,.025); transition: border-color .2s ease, box-shadow .2s ease, transform .2s ease; }
 .composer-box:focus-within { border-color: rgba(212,164,92,.72); box-shadow: 0 0 0 3px rgba(212,164,92,.09), 0 14px 40px rgba(0,0,0,.26); }
 .composer-textarea { display: block; width: 100%; padding: .65rem .7rem .5rem; resize: none; border: 0; outline: 0; color: #edf0f4; background: transparent; font-size: .9rem; line-height: 1.55; }
 .composer-textarea::placeholder { color: #8490a0; }
