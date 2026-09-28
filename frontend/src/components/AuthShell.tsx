@@ -8,6 +8,8 @@ type UserRow = Omit<User, 'status'> & { status: 'ativo' | 'pendente' | 'recusado
 type Props = { children: ReactNode };
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ? `${process.env.NEXT_PUBLIC_API_URL}/api` : '/api';
+// Deve coincidir com INATIVIDADE_SESSAO_SEGUNDOS no Worker.
+const INATIVIDADE_MS = 10 * 60 * 1000;
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
@@ -22,7 +24,13 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   } catch {
     data.error = responseText.slice(0, 240);
   }
-  if (!response.ok) throw new Error(data.error || `Falha na solicitação (HTTP ${response.status}).`);
+  if (!response.ok) {
+    if (response.status === 401) {
+      // Sessão encerrada no servidor (inatividade ou validade): volta ao login.
+      window.dispatchEvent(new CustomEvent('wiserule:sessao-expirada'));
+    }
+    throw new Error(data.error || `Falha na solicitação (HTTP ${response.status}).`);
+  }
   return data as T;
 }
 
@@ -47,6 +55,32 @@ export default function AuthShell({ children }: Props) {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
 
+  // Encerra a sessão local após 10 minutos sem interação do usuário.
+  useEffect(() => {
+    if (!user) return;
+    let timer = window.setTimeout(() => {
+      setUser(null);
+      setAdminOpen(false);
+      setMode('login');
+      setError('Sua sessão foi encerrada após 10 minutos de inatividade. Entre novamente.');
+    }, INATIVIDADE_MS);
+    const reiniciar = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        setUser(null);
+        setAdminOpen(false);
+        setMode('login');
+        setError('Sua sessão foi encerrada após 10 minutos de inatividade. Entre novamente.');
+      }, INATIVIDADE_MS);
+    };
+    const eventos: Array<keyof WindowEventMap> = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'];
+    eventos.forEach((evento) => window.addEventListener(evento, reiniciar, { passive: true }));
+    return () => {
+      window.clearTimeout(timer);
+      eventos.forEach((evento) => window.removeEventListener(evento, reiniciar));
+    };
+  }, [user]);
+
   const checkSession = useCallback(async () => {
     try {
       const data = await request<{ usuario: User | null }>('/auth/sessao')
@@ -66,6 +100,18 @@ export default function AuthShell({ children }: Props) {
       .then((data) => { setApiAvailable(true); setBootstrapAvailable(data.inicializacaoDisponivel); })
       .catch(() => { setApiAvailable(false); setBootstrapAvailable(false); });
   }, [checkSession]);
+
+  // Qualquer resposta 401 da API encerra a sessão local e exibe o login.
+  useEffect(() => {
+    const encerrar = () => {
+      setUser(null);
+      setAdminOpen(false);
+      setMode('login');
+      setError('Sua sessão expirou por inatividade. Entre novamente.');
+    };
+    window.addEventListener('wiserule:sessao-expirada', encerrar);
+    return () => window.removeEventListener('wiserule:sessao-expirada', encerrar);
+  }, []);
 
   const carregarUsuarios = async () => {
     setLoadingUsers(true);

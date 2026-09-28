@@ -25,6 +25,7 @@ import {
   hashToken,
   invalidarSessao,
   NOME_COOKIE_SESSAO,
+  renovarAtividadeSessao,
   UsuarioAutenticado,
   validarEmail,
   validarSenha,
@@ -155,9 +156,16 @@ app.use('/api/*', async (c, next) => {
   const token = getCookie(c, NOME_COOKIE_SESSAO);
   const usuario = token ? await buscarUsuarioDaSessao(c.env.DB, token) : null;
   if (!usuario) {
-    if (token) deleteCookie(c, NOME_COOKIE_SESSAO, { path: '/', secure: true, sameSite: 'None' });
-    return c.json({ status: 'error', error: 'Sua sessão expirou. Entre novamente.' }, 401);
+    if (token) {
+      // Sessão vencida por inatividade ou validade absoluta: remove do banco e do navegador.
+      await invalidarSessao(c.env.DB, token).catch(() => {});
+      deleteCookie(c, NOME_COOKIE_SESSAO, { path: '/', secure: true, sameSite: 'None' });
+    }
+    return c.json({ status: 'error', error: 'Sua sessão expirou por inatividade. Entre novamente.' }, 401);
   }
+
+  // Cada requisição autenticada renova a janela de 10 minutos de inatividade.
+  if (token) c.executionCtx.waitUntil(renovarAtividadeSessao(c.env.DB, token).catch((e) => console.error('[AUTH] Falha ao renovar atividade da sessão:', e)));
 
   if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(metodo)) {
     if (!origem || !getConfig(c.env).corsOrigins.includes(origem)) {

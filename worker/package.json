@@ -9,7 +9,8 @@
     "db:seed": "wrangler d1 execute wiserule-db --file=./migrations/002_seed.sql",
     "db:migrate:auth": "wrangler d1 execute wiserule-db --file=./migrations/003_auth.sql",
     "db:migrate:auth:remote": "wrangler d1 execute wiserule-db --remote --file=./migrations/003_auth.sql",
-    "db:migrate:notifications:remote": "wrangler d1 execute wiserule-db --remote --file=./migrations/004_notificacoes.sql"
+    "db:migrate:notifications:remote": "wrangler d1 execute wiserule-db --remote --file=./migrations/004_notificacoes.sql",
+    "db:migrate:session-idle:remote": "wrangler d1 execute wiserule-db --remote --file=./migrations/005_sessao_inatividade.sql"
   },
   "dependencies": {
     "hono": "^4.6.0",

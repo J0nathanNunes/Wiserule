@@ -1,7 +1,10 @@
 // Mantém o custo do PBKDF2 abaixo do limite de CPU por solicitação do Worker.
 const ITERACOES_HASH = 100_000;
 export const NOME_COOKIE_SESSAO = '__Host-wiserule_session';
+// Validade absoluta da sessão desde o login.
 export const DURACAO_SESSAO_SEGUNDOS = 60 * 60 * 24 * 30;
+// A sessão encerra após 10 minutos sem qualquer requisição autenticada.
+export const INATIVIDADE_SESSAO_SEGUNDOS = 10 * 60;
 
 export type UsuarioAutenticado = {
   id: string;
@@ -59,8 +62,8 @@ export async function criarSessao(db: D1Database, usuarioId: string): Promise<st
   const token = bytesHex(gerarAleatorio(32));
   const tokenHash = await hashToken(token);
   await db.prepare(
-    `INSERT INTO sessoes_usuario (token_hash, usuario_id, expira_em)
-     VALUES (?, ?, datetime('now', '+30 days'))`,
+    `INSERT INTO sessoes_usuario (token_hash, usuario_id, expira_em, ultima_atividade_em)
+     VALUES (?, ?, datetime('now', '+30 days'), datetime('now'))`,
   ).bind(tokenHash, usuarioId).run();
   await db.prepare("DELETE FROM sessoes_usuario WHERE expira_em <= datetime('now')").run();
   return token;
@@ -72,9 +75,21 @@ export async function buscarUsuarioDaSessao(db: D1Database, token: string): Prom
     `SELECT u.id, u.nome, u.email, u.papel, u.status
      FROM sessoes_usuario s
      JOIN usuarios u ON u.id = s.usuario_id
-     WHERE s.token_hash = ? AND s.expira_em > datetime('now') AND u.status = 'ativo'`,
+     WHERE s.token_hash = ?
+       AND s.expira_em > datetime('now')
+       AND s.ultima_atividade_em > datetime('now', '-10 minutes')
+       AND u.status = 'ativo'`,
   ).bind(tokenHash).first<UsuarioAutenticado>();
   return usuario || null;
+}
+
+// Renova a janela de inatividade da sessão a cada requisição autenticada.
+export async function renovarAtividadeSessao(db: D1Database, token: string): Promise<void> {
+  await db.prepare(
+    `UPDATE sessoes_usuario
+     SET ultima_atividade_em = datetime('now')
+     WHERE token_hash = ? AND expira_em > datetime('now')`,
+  ).bind(await hashToken(token)).run();
 }
 
 export async function invalidarSessao(db: D1Database, token: string): Promise<void> {

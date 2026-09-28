@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS sessoes_usuario (
     token_hash TEXT PRIMARY KEY,
     usuario_id TEXT NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
     expira_em TEXT NOT NULL,
+    ultima_atividade_em TEXT NOT NULL DEFAULT (datetime('now')),
     criado_em TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
