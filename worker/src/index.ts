@@ -324,19 +324,43 @@ app.post('/api/auth/login', async (c) => {
     return c.json({ status: 'error', error: 'Informe e-mail e senha.' }, 400);
   }
   const ip = c.req.header('CF-Connecting-IP') || 'desconhecido';
-  const tentativas = await c.env.DB.prepare(
-    `SELECT COUNT(*) AS total FROM tentativas_login
-     WHERE email = ? COLLATE NOCASE AND ip = ? AND tentada_em > datetime('now', '-15 minutes')`,
-  ).bind(email, ip).first<{ total: number }>();
+  let tentativas: { total: number } | null;
+  try {
+    tentativas = await c.env.DB.prepare(
+      `SELECT COUNT(*) AS total FROM tentativas_login
+       WHERE email = ? COLLATE NOCASE AND ip = ? AND tentada_em > datetime('now', '-15 minutes')`,
+    ).bind(email, ip).first<{ total: number }>();
+  } catch (e) {
+    console.error('[AUTH] Falha ao consultar tentativas de login:', e);
+    return c.json({ status: 'error', error: 'Falha no banco ao validar o login. Confirme a migração da tabela tentativas_login.' }, 503);
+  }
   if ((tentativas?.total || 0) >= 10) {
     return c.json({ status: 'error', error: 'Muitas tentativas. Aguarde 15 minutos e tente novamente.' }, 429);
   }
-  await c.env.DB.prepare('INSERT INTO tentativas_login (email, ip) VALUES (?, ?)').bind(email, ip).run();
-  await c.env.DB.prepare("DELETE FROM tentativas_login WHERE tentada_em < datetime('now', '-1 day')").run();
-  const usuario = await c.env.DB.prepare(
-    'SELECT id, nome, email, senha_hash, senha_salt, papel, status FROM usuarios WHERE email = ? COLLATE NOCASE',
-  ).bind(email).first<{ id: string; nome: string; email: string; senha_hash: string; senha_salt: string; papel: 'admin' | 'usuario'; status: 'pendente' | 'ativo' | 'recusado' }>();
-  if (!usuario || !(await verificarSenha(senha, usuario.senha_hash, usuario.senha_salt))) {
+  try {
+    await c.env.DB.prepare('INSERT INTO tentativas_login (email, ip) VALUES (?, ?)').bind(email, ip).run();
+    await c.env.DB.prepare("DELETE FROM tentativas_login WHERE tentada_em < datetime('now', '-1 day')").run();
+  } catch (e) {
+    console.error('[AUTH] Falha ao registrar tentativa de login:', e);
+    return c.json({ status: 'error', error: 'Falha no banco ao registrar a tentativa de login.' }, 503);
+  }
+  let usuario: { id: string; nome: string; email: string; senha_hash: string; senha_salt: string; papel: 'admin' | 'usuario'; status: 'pendente' | 'ativo' | 'recusado' } | null;
+  try {
+    usuario = await c.env.DB.prepare(
+      'SELECT id, nome, email, senha_hash, senha_salt, papel, status FROM usuarios WHERE email = ? COLLATE NOCASE',
+    ).bind(email).first<{ id: string; nome: string; email: string; senha_hash: string; senha_salt: string; papel: 'admin' | 'usuario'; status: 'pendente' | 'ativo' | 'recusado' }>();
+  } catch (e) {
+    console.error('[AUTH] Falha ao consultar usuário no login:', e);
+    return c.json({ status: 'error', error: 'Falha no banco ao consultar o cadastro. Confirme a migração da tabela usuarios.' }, 503);
+  }
+  let senhaValida = false;
+  try {
+    senhaValida = Boolean(usuario) && await verificarSenha(senha, usuario!.senha_hash, usuario!.senha_salt);
+  } catch (e) {
+    console.error('[AUTH] Falha ao verificar senha:', e);
+    return c.json({ status: 'error', error: 'Não foi possível validar a senha agora. Tente novamente.' }, 500);
+  }
+  if (!senhaValida || !usuario) {
     return c.json({ status: 'error', error: 'E-mail ou senha incorretos.' }, 401);
   }
   if (usuario.status !== 'ativo') {
@@ -355,9 +379,15 @@ app.post('/api/auth/login', async (c) => {
 
 app.get('/api/auth/sessao', async (c) => {
   if (!c.env.DB) return c.json({ status: 'error', usuario: null }, 503);
-  const token = getCookie(c, NOME_COOKIE_SESSAO);
-  const usuario = token ? await buscarUsuarioDaSessao(c.env.DB, token) : null;
-  return c.json({ status: 'sucesso', usuario });
+  try {
+    const token = getCookie(c, NOME_COOKIE_SESSAO);
+    const usuario = token ? await buscarUsuarioDaSessao(c.env.DB, token) : null;
+    return c.json({ status: 'sucesso', usuario });
+  } catch (e) {
+    console.error('[AUTH] Falha ao consultar sessão:', e);
+    // Sem sessão válida o app deve seguir para o login, não falhar com 500.
+    return c.json({ status: 'sucesso', usuario: null });
+  }
 });
 
 app.post('/api/auth/sair', async (c) => {
@@ -380,16 +410,22 @@ app.get('/api/usuarios', async (c) => {
 
 app.get('/api/notificacoes', async (c) => {
   const usuarioId = c.get('usuario').id;
-  const [notificacoes, contagem] = await Promise.all([
-    c.env.DB.prepare(
-      `SELECT id, tipo, titulo, mensagem, lida, criado_em
-       FROM notificacoes_usuario WHERE usuario_id = ?
-       ORDER BY criado_em DESC LIMIT 100`,
-    ).bind(usuarioId).all(),
-    c.env.DB.prepare('SELECT COUNT(*) AS total FROM notificacoes_usuario WHERE usuario_id = ? AND lida = 0')
-      .bind(usuarioId).first<{ total: number }>(),
-  ]);
-  return c.json({ status: 'sucesso', notificacoes: notificacoes.results || [], nao_lidas: contagem?.total || 0 });
+  try {
+    const [notificacoes, contagem] = await Promise.all([
+      c.env.DB.prepare(
+        `SELECT id, tipo, titulo, mensagem, lida, criado_em
+         FROM notificacoes_usuario WHERE usuario_id = ?
+         ORDER BY criado_em DESC LIMIT 100`,
+      ).bind(usuarioId).all(),
+      c.env.DB.prepare('SELECT COUNT(*) AS total FROM notificacoes_usuario WHERE usuario_id = ? AND lida = 0')
+        .bind(usuarioId).first<{ total: number }>(),
+    ]);
+    return c.json({ status: 'sucesso', notificacoes: notificacoes.results || [], nao_lidas: contagem?.total || 0 });
+  } catch (e) {
+    console.error('[AUTH] Falha ao consultar notificações:', e);
+    // Sem a tabela de notificações o app continua utilizável, apenas sem histórico.
+    return c.json({ status: 'sucesso', notificacoes: [], nao_lidas: 0, aviso: 'Central de notificações indisponível. Aplique a migração 004 no D1.' });
+  }
 });
 
 app.patch('/api/notificacoes/lidas', async (c) => {
