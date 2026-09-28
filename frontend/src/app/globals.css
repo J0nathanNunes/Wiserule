@@ -440,6 +440,9 @@ button { cursor: pointer; }
 .notification-read { display: flex; width: 26px; height: 26px; flex: 0 0 auto; align-items: center; justify-content: center; border: 1px solid #354154; border-radius: 7px; color: #aeb8c4; background: transparent; transition: color .18s ease, border-color .18s ease, background .18s ease; }
 .notification-read:hover { border-color: rgba(212,164,92,.6); color: #e7bd70; background: rgba(212,164,92,.08); }
 .notification-read svg { width: 14px; height: 14px; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.notification-delete { display: flex; width: 26px; height: 26px; flex: 0 0 auto; align-items: center; justify-content: center; border: 1px solid #354154; border-radius: 7px; color: #aeb8c4; background: transparent; transition: color .18s ease, border-color .18s ease, background .18s ease; }
+.notification-delete:hover { border-color: rgba(217,116,104,.5); color: #e9aaa2; background: rgba(116,43,40,.12); }
+.notification-delete svg { width: 14px; height: 14px; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .notification-footer { border-top: 1px solid #283141; padding: .55rem .8rem; }
 .notification-footer button { width: 100%; border-radius: 7px; padding: .5rem .6rem; color: #e0b66f; background: #172131; font-size: .66rem; font-weight: 600; }
 .notification-footer button:hover { background: #202a39; }

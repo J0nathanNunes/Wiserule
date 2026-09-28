@@ -443,6 +443,15 @@ app.patch('/api/notificacoes/:id', async (c) => {
   return c.json({ status: 'sucesso' });
 });
 
+app.delete('/api/notificacoes/:id', async (c) => {
+  const id = Number(c.req.param('id'));
+  if (!Number.isInteger(id) || id < 1) return c.json({ status: 'error', error: 'Notificação inválida.' }, 400);
+  const resultado = await c.env.DB.prepare('DELETE FROM notificacoes_usuario WHERE id = ? AND usuario_id = ?')
+    .bind(id, c.get('usuario').id).run();
+  if (!resultado.meta.changes) return c.json({ status: 'error', error: 'Notificação não encontrada.' }, 404);
+  return c.json({ status: 'sucesso' });
+});
+
 app.patch('/api/usuarios/:id', async (c) => {
   const administrador = c.get('usuario');
   if (administrador.papel !== 'admin') return c.json({ status: 'error', error: 'Apenas administradores podem gerenciar usuários.' }, 403);

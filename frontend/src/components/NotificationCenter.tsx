@@ -99,6 +99,16 @@ export default function NotificationCenter() {
     }
   };
 
+  const excluir = async (id: number) => {
+    try {
+      const response = await fetch(`${API_BASE}/notificacoes/${id}`, { method: 'DELETE', credentials: 'include' });
+      if (!response.ok) throw new Error('Não foi possível excluir a notificação.');
+      setItems((previous) => previous.filter((item) => item.id !== id));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Falha ao excluir.');
+    }
+  };
+
   if (!user) return null;
   const naoLidas = items.filter((item) => !item.lida);
   return <div className="notification-center" ref={areaRef}>
@@ -135,6 +145,9 @@ export default function NotificationCenter() {
             {!item.lida && <button type="button" className="notification-read" onClick={() => void marcarLida(item.id)} aria-label="Marcar como lida" title="Marcar como lida">
               <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5" /></svg>
             </button>}
+            <button type="button" className="notification-delete" onClick={() => void excluir(item.id)} aria-label="Excluir notificação" title="Excluir notificação">
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h16M9 7V5h6v2m-8 0 1 13h8l1-13M10 11v6M14 11v6" /></svg>
+            </button>
           </article>)}
         </div>}
         <footer className="notification-history-footer">
