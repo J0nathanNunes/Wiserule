@@ -142,10 +142,10 @@ button { cursor: pointer; }
 .chat-bubble-time { color: #7f8997; font-size: .6rem; font-variant-numeric: tabular-nums; }
 .chat-bubble-text { color: #e3e8e8; font-size: .9rem; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; text-align: justify; hyphens: auto; }
 .chat-report { flex: 1 1 100%; width: 100%; max-width: 100%; background: linear-gradient(160deg, #101a2a 0%, #0c1420 55%, #0e1622 100%); border: 1px solid #2e3f52; border-radius: 16px; box-shadow: 0 14px 44px rgba(0,0,0,.28), inset 0 1px rgba(255,255,255,.03); }
-.report-body { color: #dde3ea; font-size: .9rem; line-height: 1.65; text-align: justify; text-justify: inter-word; hyphens: auto; overflow-wrap: anywhere; word-break: break-word; }
-.report-body h1 { font-family: 'Segoe UI', Arial, sans-serif; font-size: 1.3rem; font-weight: 600; letter-spacing: -.02em; color: #f0f1f3; margin: 0 0 .9rem; padding-bottom: .55rem; border-bottom: 1px solid rgba(212,164,92,.32); }
-.report-body h2 { font-family: 'Segoe UI', Arial, sans-serif; font-size: .98rem; font-weight: 650; color: #e8c37f; margin: 1.3rem 0 .5rem; letter-spacing: -.01em; display: flex; align-items: center; gap: .45rem; border-bottom: 1px solid rgba(46,63,82,.8); padding-bottom: .4rem; }
-.report-body h3 { font-size: .9rem; font-weight: 650; color: #d9e0e8; margin: .8rem 0 .35rem; }
+.report-body { color: #dde3ea; font-size: .9rem; line-height: 1.65; text-align: justify; text-justify: inter-word; hyphens: auto; overflow-wrap: break-word; word-break: normal; }
+.report-body h1 { font-family: 'Segoe UI', Arial, sans-serif; font-size: 1.3rem; font-weight: 600; letter-spacing: -.02em; color: #f0f1f3; margin: 0 0 .9rem; padding-bottom: .55rem; border-bottom: 1px solid rgba(212,164,92,.32); hyphens: none; overflow-wrap: normal; }
+.report-body h2 { font-family: 'Segoe UI', Arial, sans-serif; font-size: .98rem; font-weight: 650; color: #e8c37f; margin: 1.3rem 0 .5rem; letter-spacing: -.01em; display: flex; align-items: center; gap: .45rem; border-bottom: 1px solid rgba(46,63,82,.8); padding-bottom: .4rem; hyphens: none; overflow-wrap: normal; }
+.report-body h3 { font-size: .9rem; font-weight: 650; color: #d9e0e8; margin: .8rem 0 .35rem; hyphens: none; overflow-wrap: normal; }
 .report-body p { margin: 0 0 .6rem; color: #d3dae2; text-align: justify; }
 .report-body ul, .report-body ol { margin: .25rem 0 .6rem; padding-left: 1.3rem; }
 .report-body li { margin: .18rem 0; color: #cdd5df; text-align: justify; }
@@ -157,7 +157,10 @@ button { cursor: pointer; }
 .report-body hr { border: 0; border-top: 1px solid #2e3f52; margin: 1rem 0; }
 .report-body a { color: #e0b66f; }
 .report-body table { display: block; width: 100%; overflow-x: auto; border-collapse: collapse; margin: .65rem 0 1rem; font-size: .82rem; }
-.report-body th, .report-body td { border: 1px solid #2e3f52; padding: .55rem .7rem; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+.report-body th, .report-body td { border: 1px solid #2e3f52; padding: .55rem .7rem; text-align: left; vertical-align: top; hyphens: none; overflow-wrap: normal; word-break: normal; white-space: normal; }
+/* Células curtas (até ~5 palavras): não quebram — valores monetários, siglas e códigos ficam intactos. */
+.report-body th, .report-body td { white-space: nowrap; }
+.report-body td[data-wrap], .report-body th[data-wrap] { white-space: normal; }
 .report-body th { color: #e8c37f; background: rgba(212,164,92,.08); font-weight: 650; }
 .report-body tr:nth-child(even) td { background: rgba(255,255,255,.018); }
 .report-body blockquote { margin: .6rem 0; border-left: 3px solid #bd9657; padding: .35rem .8rem; color: #b8c2ce; background: rgba(212,164,92,.045); }

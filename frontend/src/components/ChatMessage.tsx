@@ -54,6 +54,20 @@ export default function ChatMessage({ message }: MessageProps) {
   const bruto = isUser ? message.content : normalizarMarkdown(message.content);
   const conteudo = isUser ? bruto : limparEmojis(bruto);
   const isReport = !isUser && /##\s*Dados da Empresa/i.test(conteudo);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Células de tabela com mais de 5 palavras quebram texto (data-wrap);
+  // células curtas (valores monetários, siglas, códigos) ficam intactas.
+  useEffect(() => {
+    if (!isReport || !containerRef.current) return;
+    const celulas = containerRef.current.querySelectorAll('th, td');
+    celulas.forEach((celula) => {
+      const palavras = (celula.textContent || '').trim().split(/\s+/).filter(Boolean);
+      if (palavras.length > 5) {
+        celula.setAttribute('data-wrap', 'true');
+      }
+    });
+  }, [isReport, conteudo]);
 
   return (
     <div className={`chat-row ${isUser ? 'chat-row-user' : 'chat-row-assistant'}`}>
@@ -65,7 +79,7 @@ export default function ChatMessage({ message }: MessageProps) {
         {isUser ? (
           <p className="chat-bubble-text">{conteudo}</p>
         ) : (
-          <div className={`markdown-body ${isReport ? 'report-body' : 'chat-bubble-text'}`}>
+          <div ref={containerRef} className={`markdown-body ${isReport ? 'report-body' : 'chat-bubble-text'}`}>
             <ReactMarkdown remarkPlugins={[remarkGfm]}>
               {conteudo}
             </ReactMarkdown>
