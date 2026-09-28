@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import StatusModal from './StatusModal';
 import NotificationCenter from './NotificationCenter';
 import { useAuth } from '@/contexts/AuthContext';
@@ -34,6 +34,28 @@ export default function Sidebar({ onSubmit, isLoading, onNovaAnalise }: SidebarP
   const [statusApis, setStatusApis] = useState<any>(null);
   const [statusLoading, setStatusLoading] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const profileRef = useRef<HTMLDivElement>(null);
+
+  // Fecha o menu de perfil ao clicar ou focar fora dele.
+  useEffect(() => {
+    if (!profileOpen) return;
+    const fechar = (evento: MouseEvent | FocusEvent) => {
+      if (profileRef.current && evento.target instanceof Node && !profileRef.current.contains(evento.target)) {
+        setProfileOpen(false);
+      }
+    };
+    const fecharTeclado = (evento: KeyboardEvent) => {
+      if (evento.key === 'Escape') setProfileOpen(false);
+    };
+    document.addEventListener('mousedown', fechar);
+    document.addEventListener('focusin', fechar);
+    document.addEventListener('keydown', fecharTeclado);
+    return () => {
+      document.removeEventListener('mousedown', fechar);
+      document.removeEventListener('focusin', fechar);
+      document.removeEventListener('keydown', fecharTeclado);
+    };
+  }, [profileOpen]);
 
   const handleChange = (field: keyof FormData, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -244,7 +266,7 @@ export default function Sidebar({ onSubmit, isLoading, onNovaAnalise }: SidebarP
       <div className="sidebar-account-area">
         <div className="sidebar-account-actions">
           <NotificationCenter />
-          <div className="sidebar-profile-wrap">
+          <div className="sidebar-profile-wrap" ref={profileRef}>
             <button type="button" className="sidebar-profile-trigger" onClick={() => setProfileOpen((open) => !open)} aria-expanded={profileOpen}>
               <span className="sidebar-profile-avatar">{user?.nome.trim().charAt(0).toLocaleUpperCase('pt-BR') || 'U'}</span>
               <span className="sidebar-profile-label"><strong>{user?.nome || 'Usuário'}</strong><small>{user?.papel === 'admin' ? 'Administrador' : 'Perfil'}</small></span>

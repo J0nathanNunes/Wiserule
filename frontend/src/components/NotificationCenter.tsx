@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 
 type Notice = { id: number; tipo: 'acesso' | 'erro' | 'sistema'; titulo: string; mensagem: string; lida: boolean; criado_em: string };
@@ -13,6 +13,28 @@ export default function NotificationCenter() {
   const [unread, setUnread] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const areaRef = useRef<HTMLDivElement>(null);
+
+  // Fecha o painel ao clicar ou focar fora da área do sino.
+  useEffect(() => {
+    if (!open) return;
+    const fechar = (evento: MouseEvent | FocusEvent) => {
+      if (areaRef.current && evento.target instanceof Node && !areaRef.current.contains(evento.target)) {
+        setOpen(false);
+      }
+    };
+    const fecharTeclado = (evento: KeyboardEvent) => {
+      if (evento.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('mousedown', fechar);
+    document.addEventListener('focusin', fechar);
+    document.addEventListener('keydown', fecharTeclado);
+    return () => {
+      document.removeEventListener('mousedown', fechar);
+      document.removeEventListener('focusin', fechar);
+      document.removeEventListener('keydown', fecharTeclado);
+    };
+  }, [open]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -46,7 +68,8 @@ export default function NotificationCenter() {
     try {
       const response = await fetch(`${API_BASE}/notificacoes/${id}`, { method: 'PATCH', credentials: 'include' });
       if (!response.ok) throw new Error('Não foi possível atualizar a notificação.');
-      setItems((previous) => previous.map((item) => item.id === id ? { ...item, lida: true } : item));
+      // Notificações lidas saem do painel para não acumularem no histórico.
+      setItems((previous) => previous.filter((item) => item.id !== id));
       setUnread((count) => Math.max(0, count - 1));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Falha ao atualizar.');
@@ -57,7 +80,7 @@ export default function NotificationCenter() {
     try {
       const response = await fetch(`${API_BASE}/notificacoes/lidas`, { method: 'PATCH', credentials: 'include' });
       if (!response.ok) throw new Error('Não foi possível atualizar as notificações.');
-      setItems((previous) => previous.map((item) => ({ ...item, lida: true })));
+      setItems([]);
       setUnread(0);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Falha ao atualizar.');
@@ -65,7 +88,7 @@ export default function NotificationCenter() {
   };
 
   if (!user) return null;
-  return <div className="notification-center">
+  return <div className="notification-center" ref={areaRef}>
     <button type="button" className="notification-trigger" onClick={() => void togglePanel()} aria-label={`Notificações${unread ? `, ${unread} não lidas` : ''}`} aria-expanded={open}>
       <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9ZM10 21h4" /></svg>
       {unread > 0 && <span className="notification-badge">{unread > 99 ? '99+' : unread}</span>}
