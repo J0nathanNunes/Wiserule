@@ -5,10 +5,11 @@ import { useEffect, useState, useRef } from 'react';
 type ChatInputProps = {
   onSend: (text: string, file?: File | null) => void;
   isLoading: boolean;
+  onCancel?: () => void;
   suggestion?: { text: string; key: number } | null;
 };
 
-export default function ChatInput({ onSend, isLoading, suggestion }: ChatInputProps) {
+export default function ChatInput({ onSend, isLoading, onCancel, suggestion }: ChatInputProps) {
   const [input, setInput] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -107,20 +108,28 @@ export default function ChatInput({ onSend, isLoading, suggestion }: ChatInputPr
               />
             </div>
 
-            <button
-              type="button"
-              onClick={handleSubmit}
-              disabled={isLoading || (!input.trim() && !selectedFile)}
-              className="composer-send"
-              title="Enviar mensagem"
-              aria-label="Enviar mensagem"
-            >
-              {isLoading ? (
-                <svg className="animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" strokeOpacity=".25" strokeWidth="2.5" /><path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="2.5" /></svg>
-              ) : (
+            {isLoading && onCancel ? (
+              <button
+                type="button"
+                onClick={onCancel}
+                className="composer-send composer-cancel"
+                title="Cancelar análise em andamento"
+                aria-label="Cancelar análise em andamento"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleSubmit}
+                disabled={isLoading || (!input.trim() && !selectedFile)}
+                className="composer-send"
+                title="Enviar mensagem"
+                aria-label="Enviar mensagem"
+              >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="M12 19V5m-6 6 6-6 6 6" /></svg>
-              )}
-            </button>
+              </button>
+            )}
           </div>
         </div>
 

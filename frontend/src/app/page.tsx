@@ -98,6 +98,15 @@ export default function Home() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const suggestionKeyRef = useRef(0);
+  // Controle de cancelamento da análise em andamento (polling da tarefa ativa)
+  const tarefaCanceladaRef = useRef(false);
+
+  const cancelarAnalise = () => {
+    tarefaCanceladaRef.current = true;
+    setIsLoading(false);
+    setStatusMsg('');
+    addMessage('assistant', '🚫 **Análise cancelada.** O acompanhamento foi interrompido e você já pode enviar uma nova mensagem ou anexo. O resultado, se chegar, não será exibido.');
+  };
 
   const selectChatSuggestion = (text: string) => {
     suggestionKeyRef.current += 1;
@@ -127,6 +136,8 @@ export default function Home() {
     };
 
     const poll = async () => {
+      // Análise cancelada pelo usuário: para o acompanhamento silenciosamente.
+      if (tarefaCanceladaRef.current) return;
       try {
         const res = await fetch(`${API_BASE}/analisar/status/${taskId}`, { credentials: 'include' });
         const data = await res.json();
@@ -181,6 +192,7 @@ export default function Home() {
 
         if (attempts < maxAttempts) {
           attempts++;
+          if (tarefaCanceladaRef.current) return;
           setTimeout(poll, 2000);
         } else {
           setMessages((prev) =>
@@ -194,6 +206,7 @@ export default function Home() {
       } catch {
         if (attempts < maxAttempts) {
           attempts++;
+          if (tarefaCanceladaRef.current) return;
           setTimeout(poll, 2000);
         } else {
           setIsLoading(false);
@@ -252,6 +265,7 @@ export default function Home() {
 
       const assistantMsg = addMessage('assistant', '⏳ **Analisando...**');
       if (data.dados_extraidos?.task_id) {
+        tarefaCanceladaRef.current = false;
         pollTask(data.dados_extraidos.task_id, assistantMsg.id);
       } else {
         addMessage('assistant', data.resumo || '❌ **A análise não foi iniciada:** o servidor não retornou o identificador da tarefa. Tente novamente.');
@@ -482,6 +496,7 @@ export default function Home() {
       const mensagem = addMessage('assistant', '⏳ **Gerando análise com os dados conferidos...**');
       URL.revokeObjectURL(revisao.urlOriginal);
       setRevisaoOcr(null);
+      tarefaCanceladaRef.current = false;
       pollTask(data.dados_extraidos.task_id, mensagem.id);
     } catch (error) {
       addMessage('assistant', `❌ **Não foi possível iniciar a análise:** ${error instanceof Error ? error.message : 'erro desconhecido'}`);
@@ -671,6 +686,7 @@ export default function Home() {
         <ChatInput
           onSend={enviarMensagem}
           isLoading={isLoading}
+          onCancel={cancelarAnalise}
           suggestion={chatSuggestion}
         />
       </div>

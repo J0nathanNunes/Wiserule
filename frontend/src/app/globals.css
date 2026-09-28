@@ -230,6 +230,9 @@ button { cursor: pointer; }
 .composer-send:hover:not(:disabled) { transform: translateY(-1px); filter: brightness(1.08); box-shadow: 0 6px 20px rgba(212,164,92,.28); }
 .composer-send:disabled { cursor: not-allowed; color: #78818e; background: #242e3b; border-color: #303a49; box-shadow: none; }
 .composer-send:focus-visible, .composer-attach:focus-visible, .composer-remove-file:focus-visible { outline: 2px solid #e7bd70; outline-offset: 2px; }
+.composer-cancel { color: #fff; background: linear-gradient(145deg, #d9534f, #b8382f); border-color: rgba(255,255,255,.22); box-shadow: 0 4px 14px rgba(217,83,79,.28); animation: composer-cancel-pulse 1.6s ease-in-out infinite; }
+.composer-cancel:hover { filter: brightness(1.1); box-shadow: 0 6px 20px rgba(217,83,79,.4); }
+@keyframes composer-cancel-pulse { 0%, 100% { box-shadow: 0 4px 14px rgba(217,83,79,.28); } 50% { box-shadow: 0 4px 22px rgba(217,83,79,.55); } }
 .composer-file { display: flex; align-items: center; gap: .55rem; margin: .1rem .1rem .5rem; padding: .45rem .55rem; border: 1px solid #354154; border-radius: 10px; background: rgba(25,36,52,.8); }
 .composer-file-icon { display: flex; width: 30px; height: 30px; flex: 0 0 auto; align-items: center; justify-content: center; border-radius: 8px; color: #e2bb74; background: rgba(212,164,92,.12); }
 .composer-file-icon svg { width: 16px; height: 16px; stroke-width: 1.6; }
