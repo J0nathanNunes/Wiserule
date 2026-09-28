@@ -38,7 +38,7 @@ export function getConfig(env: Env) {
     geranetBaseUrl: env.GERANET_BASE_URL || 'https://nfe.geranet.net/api/v1',
     maxFileSizeMb: parseInt(env.MAX_FILE_SIZE_MB || '5', 10),
     modeloOcr: env.MODELO_OCR || 'minimax/minimax-m3',
-    modeloAnalise: env.MODELO_ANALISE || 'openai/gpt-6-luna-pro',
+    modeloAnalise: env.MODELO_ANALISE || 'openai/gpt-4o-mini',
     modeloVision: env.MODELO_VISAO || 'minimax/minimax-m3',
     // Modelo terciário multimodal para manter três extrações independentes.
     modeloOcrAlt: env.MODELO_OCR_ALT || 'google/gemini-2.5-flash',
