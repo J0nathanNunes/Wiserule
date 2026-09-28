@@ -17,7 +17,20 @@ function normalizarMarkdown(texto: string): string {
   // Alguns modelos envolvem o relatório inteiro em um bloco de código; nesse
   // caso o Markdown é exibido como texto cru em vez de ser renderizado.
   const bloco = limpo.match(/^```(?:markdown|md)?\s*\n([\s\S]*?)\n```$/i);
-  return (bloco ? bloco[1] : limpo).trim();
+  if (bloco) return bloco[1].trim();
+  // O modelo pode envolver APENAS o relatório na cerca, depois do aviso de
+  // conclusão (ex.: "✅ Análise concluída...```markdown ... ```"). Nesse caso
+  // extrai o conteúdo do primeiro bloco quando o prefácio é curto.
+  const prefixo = limpo.match(/^[\s\S]{0,300}?```(?:markdown|md)?\s*\n([\s\S]*?)(?:\n```|```$)/i);
+  if (prefixo && prefixo[1] && /##|Dados da Empresa/i.test(prefixo[1])) {
+    return prefixo[1].trim();
+  }
+  // Cerca aberta sem fechamento: remove as marcas e mantém o conteúdo.
+  const aberta = limpo.match(/^[\s\S]{0,300}?```(?:markdown|md)?\s*\n([\s\S]+)$/i);
+  if (aberta && aberta[1] && /##|Dados da Empresa/i.test(aberta[1])) {
+    return aberta[1].replace(/\n```\s*$/, '').trim();
+  }
+  return limpo;
 }
 
 // Substitui emojis decorativos por marcadores tipográficos discretos, sem
