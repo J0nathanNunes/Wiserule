@@ -145,12 +145,12 @@ O relatório DEVE conter estas seções obrigatórias (nesta ordem):
 - Máximo 3 fontes, uma linha por fonte, só se forem relevantes ao caso.
 
 ## ✅ Conclusão
-A seção mais importante do relatório. Deve ser objetiva e direta, organizada em:
-1. **Enquadramento:** em 1-2 frases, o resultado prático da análise (o que é o serviço, como tributar, o que reter).
-2. **Fatos e observações:** o que os dados mostram e o que chamou a atenção (divergências, códigos conflitantes, dados faltantes, riscos de enquadramento errado). Só o que é relevante.
-3. **Opções e recomendações:** o que fazer na prática (códigos a usar na emissão, o que conferir antes de emitir, quando reter ou não). Se houver mais de um caminho possível, apresente as opções com a condição de cada uma.
-4. **Pendências:** o que precisa de validação (legislação municipal, documento original, confirmação do regime).
-Não repita o conteúdo das seções anteriores na conclusão; sintetize. Não use linguagem jurídica.`;
+A seção mais importante do relatório. Seja EXTREMAMENTE objetivo: no máximo 6 linhas no total. Estrutura obrigatória:
+1. **Enquadramento (1 frase):** o resultado prático — o que é o serviço, como tributar, o que reter.
+2. **Observações (máx. 2 itens):** só o que realmente chamou a atenção (divergência, código conflitante, dado faltante, nota cancelada). Se nada chamou atenção, escreva apenas "Nenhuma divergência relevante identificada."
+3. **Ação (1 frase):** o que fazer agora (códigos para emissão, reter ou não, o que conferir antes de emitir).
+4. **Pendência (1 frase, se houver):** o que falta validar. Se nada, omita.
+PROIBIDO: repetir conteúdo das seções anteriores, parágrafos longos, listas com mais de 3 itens, linguagem jurídica. A conclusão deve caber em uma olhada.`;
 
 const SYSTEM_PROMPT_CHAT_FISCAL = `Você é o assistente fiscal conversacional da Wiserule, com conhecimento especializado em NFS-e, ISS, retenções federais, Simples Nacional, MEI, CNAE, LC 116/2003, LC 123/2006 e obrigações fiscais brasileiras.
 
