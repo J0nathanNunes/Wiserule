@@ -602,6 +602,8 @@ app.post('/api/analisar', async (c) => {
     // --- FASE 1: Extraer datos ---
     let datosExtraidos: Record<string, unknown> = {};
     let resultadoOcr: Awaited<ReturnType<typeof extraerDatosNfse>> | null = null;
+    // Cruzamento com o emissor confirmado na revisão (para origem_dados do relatório).
+    let cruzamentoConfirmado: { sugestoes?: Array<{ campo: string; confianca: 'forte' | 'fraca' }> } | null = null;
 
     if (archivo && archivo instanceof File) {
       const extension = archivo.name.includes('.')
@@ -690,6 +692,17 @@ app.post('/api/analisar', async (c) => {
     const dataEmissao = dataEmissaoForm || String(datosExtraidos.data_emissao || '');
     const simplesNacionalNfse = simplesNacionalNfseForm || String(datosExtraidos.simples_nacional_nfse || '');
     const meiNfse = meiNfseForm || datosExtraidos.mei_nfse === true;
+
+    // Se a revisão veio de um cruzamento com o emissor, registra para o relatório.
+    try {
+      const cruzamentoForm = form.get('cruzamento_emissor');
+      if (cruzamentoForm) {
+        const parsed = JSON.parse(cruzamentoForm.toString()) as { sugestoes?: Array<{ campo: string; confianca: 'forte' | 'fraca' }> };
+        if (parsed && Array.isArray(parsed.sugestoes)) cruzamentoConfirmado = parsed;
+      }
+    } catch {
+      // payload inválido: ignora, origem fica como usuário/OCR
+    }
 
     const divergenciasCriticas = resultadoOcr?.campos_divergentes.filter((campo) => {
       if (campo === 'cnpj') return !cnpjForm;
@@ -839,6 +852,36 @@ app.post('/api/analisar', async (c) => {
     });
 
     // Dispara o processamento em background
+    // Origem de cada campo da nota: emissor (Geranet) > usuário > OCR.
+    // O LLM usa isso para indicar a origem dos dados no relatório.
+    const origemDados: Record<string, string> = {
+      numero: numeroNfseForm ? 'usuário' : 'OCR',
+      data_emissao: dataEmissaoForm ? 'usuário' : 'OCR',
+      cnpj_prestador: cnpjForm ? 'usuário' : 'OCR',
+      cnpj_tomador: cnpjTomadorForm ? 'usuário' : 'OCR',
+      codigo_servico: codigoServicoForm ? 'usuário' : 'OCR',
+      valor_bruto: valorForm ? 'usuário' : 'OCR',
+      valor_liquido: valorLiquidoForm ? 'usuário' : 'OCR',
+      iss_retencao_declarada: issRetencaoForm ? 'usuário' : 'OCR',
+    };
+    if (cruzamentoConfirmado && cruzamentoConfirmado.sugestoes) {
+      for (const sugestao of cruzamentoConfirmado.sugestoes) {
+        if (sugestao.confianca === 'forte') {
+          const mapa: Record<string, string> = {
+            numero_nfse: 'numero',
+            valor: 'valor_bruto',
+            valor_liquido: 'valor_liquido',
+            data_emissao: 'data_emissao',
+            cnpj_tomador: 'cnpj_tomador',
+            codigo_servico_nfse: 'codigo_servico',
+            iss_retencao: 'iss_retencao_declarada',
+          };
+          const chave = mapa[sugestao.campo];
+          if (chave) origemDados[chave] = 'emissor (Geranet)';
+        }
+      }
+    }
+
     const contexto = {
       empresa,
       nfse: {
@@ -856,6 +899,7 @@ app.post('/api/analisar', async (c) => {
         simples_nacional_declarado: simplesNacionalNfse,
         mei_declarado: meiNfse,
       },
+      origem_dados: origemDados,
       correlacion_formatada: correlacionFormatada,
       cnae_codigo: empresa.cnae_codigo,
       cnae_descricao: empresa.cnae_descricao,

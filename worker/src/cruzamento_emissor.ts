@@ -16,6 +16,7 @@
 
 import { Env } from './config';
 import { consultarNotas, extraerNotasMasRecientes } from './geranet';
+import { obterCacheEmissor, salvarCacheEmissor } from './db';
 
 export interface DadosParaCruzamento {
   cnpj: string;
@@ -178,6 +179,24 @@ export async function cruzarComEmissor(
   if (!env.GERANET_API_KEY) return vazio;
 
   try {
+    // Cache D1 (TTL 15 min): reanexos do mesmo CNPJ não reconsultam o emissor.
+    if (env.DB) {
+      const respostaCache = await obterCacheEmissor(env.DB, ocr.cnpj);
+      if (respostaCache) {
+        try {
+          const dadosCache = JSON.parse(respostaCache) as Record<string, unknown>;
+          const notas = extraerNotasMasRecientes(dadosCache, 30);
+          const casamentoCache = casarMelhorNota(ocr, notas);
+          if (casamentoCache) {
+            return resolverCasamento(ocr, casamentoCache, vazio, true);
+          }
+          return { ...vazio, mensagem: 'Nenhuma nota do emissor (cache) corresponde aos dados lidos.' };
+        } catch {
+          // Cache corrompido: segue para consulta fresca.
+        }
+      }
+    }
+
     const consulta = await consultarNotas(
       {
         cnpj: ocr.cnpj,
@@ -191,55 +210,78 @@ export async function cruzarComEmissor(
       return { ...vazio, mensagem: consulta.error };
     }
 
+    // Guarda a resposta crua em cache para reanexos próximos.
+    if (env.DB) {
+      await salvarCacheEmissor(env.DB, ocr.cnpj, JSON.stringify(consulta.datos));
+    }
+
     const notas = extraerNotasMasRecientes(consulta.datos, 30);
     if (notas.length === 0) return { ...vazio, mensagem: 'Nenhuma nota emitida encontrada no emissor.' };
 
-    // Melhor nota por pontuação.
-    let melhor: { nota: Record<string, unknown>; pontos: number; maximo: number; criterios: string[] } | null = null;
-    for (const nota of notas) {
-      const p = pontuarNota(ocr, nota);
-      if (!melhor || p.pontos > melhor.pontos) melhor = { nota, ...p };
-    }
+    const melhor = casarMelhorNota(ocr, notas);
     if (!melhor || melhor.pontos === 0) {
       return { ...vazio, mensagem: 'Nenhuma nota do emissor corresponde aos dados lidos.' };
     }
-
-    const chaveExata = melhor.criterios.includes('chave');
-    const fortes = melhor.criterios.filter((c) => c === 'numero' || c === 'valor' || c === 'chave').length;
-    const proporcao = melhor.maximo > 0 ? melhor.pontos / melhor.maximo : 0;
-
-    // Match forte: chave exata, ou número+valor (+data) com boa proporção.
-    if (chaveExata || (fortes >= 2 && proporcao >= 0.6)) {
-      const confianca: 'forte' | 'fraca' = chaveExata || fortes >= 3 ? 'forte' : 'fraca';
-      const sugestoes = montarSugestoes(ocr, melhor.nota, confianca);
-      return {
-        status: 'match_forte',
-        nota: melhor.nota,
-        sugestoes,
-        divergencias_resolvidas: confianca === 'forte'
-          ? sugestoes.filter((s) => s.confianca === 'forte').map((s) => s.campo)
-          : [],
-        divergencias_novas: [],
-        mensagem: `Nota casada com o emissor (${melhor.criterios.join(', ')}).`,
-      };
-    }
-
-    // Match fraco: só valor+data ou número+valor, proporção razoável.
-    if (proporcao >= 0.4 && fortes >= 1) {
-      return {
-        status: 'match_fraco',
-        nota: melhor.nota,
-        sugestoes: montarSugestoes(ocr, melhor.nota, 'fraca'),
-        divergencias_resolvidas: [],
-        divergencias_novas: [],
-        mensagem: `Possível correspondência no emissor (${melhor.criterios.join(', ')}); confirme os campos.`,
-      };
-    }
-
-    return { ...vazio, mensagem: 'Correspondência fraca demais com as notas do emissor.' };
+    return resolverCasamento(ocr, melhor, vazio, false);
   } catch (e) {
     return { ...vazio, mensagem: e instanceof Error ? e.message.slice(0, 200) : 'Erro no cruzamento com o emissor.' };
   }
+}
+
+/** Casamento da melhor nota do emissor por pontuação. */
+function casarMelhorNota(
+  ocr: DadosParaCruzamento,
+  notas: Array<Record<string, unknown>>,
+): { nota: Record<string, unknown>; pontos: number; maximo: number; criterios: string[] } | null {
+  let melhor: { nota: Record<string, unknown>; pontos: number; maximo: number; criterios: string[] } | null = null;
+  for (const nota of notas) {
+    const p = pontuarNota(ocr, nota);
+    if (!melhor || p.pontos > melhor.pontos) melhor = { nota, ...p };
+  }
+  return melhor;
+}
+
+/** Classifica o casamento (forte/fraco) e monta o resultado. */
+function resolverCasamento(
+  ocr: DadosParaCruzamento,
+  melhor: { nota: Record<string, unknown>; pontos: number; maximo: number; criterios: string[] },
+  vazio: ResultadoCruzamento,
+  doCache: boolean,
+): ResultadoCruzamento {
+  const chaveExata = melhor.criterios.includes('chave');
+  const fortes = melhor.criterios.filter((c) => c === 'numero' || c === 'valor' || c === 'chave').length;
+  const proporcao = melhor.maximo > 0 ? melhor.pontos / melhor.maximo : 0;
+  const sufixoCache = doCache ? ' (cache)' : '';
+
+  // Match forte: chave exata, ou número+valor (+data) com boa proporção.
+  if (chaveExata || (fortes >= 2 && proporcao >= 0.6)) {
+    const confianca: 'forte' | 'fraca' = chaveExata || fortes >= 3 ? 'forte' : 'fraca';
+    const sugestoes = montarSugestoes(ocr, melhor.nota, confianca);
+    return {
+      status: 'match_forte',
+      nota: melhor.nota,
+      sugestoes,
+      divergencias_resolvidas: confianca === 'forte'
+        ? sugestoes.filter((s) => s.confianca === 'forte').map((s) => s.campo)
+        : [],
+      divergencias_novas: [],
+      mensagem: `Nota casada com o emissor (${melhor.criterios.join(', ')})${sufixoCache}.`,
+    };
+  }
+
+  // Match fraco: só valor+data ou número+valor, proporção razoável.
+  if (proporcao >= 0.4 && fortes >= 1) {
+    return {
+      status: 'match_fraco',
+      nota: melhor.nota,
+      sugestoes: montarSugestoes(ocr, melhor.nota, 'fraca'),
+      divergencias_resolvidas: [],
+      divergencias_novas: [],
+      mensagem: `Possível correspondência no emissor (${melhor.criterios.join(', ')})${sufixoCache}; confirme os campos.`,
+    };
+  }
+
+  return { ...vazio, mensagem: 'Correspondência fraca demais com as notas do emissor.' };
 }
 
 /** Decide se vale a pena consultar o emissor (gatilho condicional). */

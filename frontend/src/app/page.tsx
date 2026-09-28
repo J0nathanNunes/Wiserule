@@ -535,6 +535,9 @@ export default function Home() {
     payload.append('uf', revisao.uf);
     if (revisao.texto.trim()) payload.append('mensaje', revisao.texto.trim());
     payload.append('confirmar_dados', 'true');
+    if (revisao.cruzamentoEmissor && (revisao.cruzamentoEmissor.status === 'match_forte' || revisao.cruzamentoEmissor.status === 'match_fraco')) {
+      payload.append('cruzamento_emissor', JSON.stringify(revisao.cruzamentoEmissor));
+    }
     try {
       const response = await fetch(`${API_BASE}/analisar`, { method: 'POST', credentials: 'include', body: payload });
       const data = await response.json();

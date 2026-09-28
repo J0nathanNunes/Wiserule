@@ -34,6 +34,57 @@ export async function salvarAnalise(
   }
 }
 
+// --- Cache de consultas ao emissor (Geranet) por CNPJ ---
+
+export interface CacheEmissor {
+  resposta: string;
+  criado_em: string;
+}
+
+/** TTL do cache do emissor em segundos (15 minutos). */
+export const TTL_CACHE_EMISSOR_SEGUNDOS = 15 * 60;
+
+/** Busca a resposta do emissor em cache para o CNPJ, se ainda válida. */
+export async function obterCacheEmissor(
+  db: D1Database,
+  cnpj: string,
+): Promise<string | null> {
+  try {
+    const res = await db
+      .prepare(
+        `SELECT resposta FROM cache_emissor_nfse
+         WHERE cnpj = ? AND criado_em > datetime('now', '-${TTL_CACHE_EMISSOR_SEGUNDOS} seconds')
+         ORDER BY criado_em DESC LIMIT 1`
+      )
+      .bind(cnpj)
+      .first<{ resposta: string }>();
+    return res?.resposta || null;
+  } catch (e) {
+    console.error('[DB] Erro ao ler cache do emissor:', e);
+    return null;
+  }
+}
+
+/** Salva (ou substitui) a resposta do emissor em cache para o CNPJ. */
+export async function salvarCacheEmissor(
+  db: D1Database,
+  cnpj: string,
+  resposta: string,
+): Promise<void> {
+  try {
+    await db
+      .prepare(
+        `INSERT INTO cache_emissor_nfse (cnpj, resposta, criado_em)
+         VALUES (?, ?, datetime('now'))
+         ON CONFLICT(cnpj) DO UPDATE SET resposta = excluded.resposta, criado_em = datetime('now')`
+      )
+      .bind(cnpj, resposta)
+      .run();
+  } catch (e) {
+    console.error('[DB] Erro ao salvar cache do emissor:', e);
+  }
+}
+
 export async function listarAnalises(db: D1Database, limite = 20): Promise<Analise[]> {
   try {
     const res = await db

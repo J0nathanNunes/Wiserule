@@ -106,6 +106,7 @@ REGRAS PARA USAR OS DADOS:
 - Não conclua que a NFS-e e a atividade efetivamente prestada são incompatíveis apenas por as descrições serem diferentes; destaque os dados e peça validação quando a diferença puder alterar o enquadramento.
 - Diferencie fatos extraídos, dados consultados e conclusões. Não invente alíquotas municipais, retenções ou itens fiscais; informe limitações e necessidade de validação local quando aplicável.
 - Em caso de conflito, apresente ambos os valores e a origem de cada um.
+- O bloco "origem_dados" indica de onde veio cada campo da nota (OCR, usuário ou emissor/Geranet). Quando um campo tiver origem "emissor (Geranet)", mencione na seção de dados da nota que o valor foi confirmado no emissor (ex.: "valor confirmado no emissor"). Não repita a origem de cada campo em lista; use apenas quando for relevante para a confiabilidade do dado.
 
 O relatório DEVE conter estas seções obrigatórias (nesta ordem):
 
