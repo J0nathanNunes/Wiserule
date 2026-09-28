@@ -29,7 +29,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       // Sessão encerrada no servidor (inatividade ou validade): volta ao login.
       window.dispatchEvent(new CustomEvent('wiserule:sessao-expirada'));
     }
-    throw new Error(data.error || `Falha na solicitação (HTTP ${response.status}).`);
+    const erro = new Error(data.error || `Falha na solicitação (HTTP ${response.status}).`);
+    (erro as Error & { status?: number }).status = response.status;
+    throw erro;
   }
   return data as T;
 }
@@ -86,9 +88,17 @@ export default function AuthShell({ children }: Props) {
       const data = await request<{ usuario: User | null }>('/auth/sessao')
       setApiAvailable(true);
       setUser(data.usuario);
-    } catch {
-      setApiAvailable(false);
-      setUser(null);
+    } catch (cause) {
+      // 401 significa sessão inexistente/expirada: a API está acessível, apenas
+      // não há login. Só marcamos a API como indisponível em falhas de rede/5xx.
+      const status = (cause as Error & { status?: number }).status;
+      if (status === 401) {
+        setApiAvailable(true);
+        setUser(null);
+      } else {
+        setApiAvailable(false);
+        setUser(null);
+      }
     } finally {
       setChecking(false);
     }
