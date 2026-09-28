@@ -646,9 +646,6 @@ export default function Home() {
 
           {isLoading && (
             <div className="chat-row chat-row-assistant">
-              <div className="chat-avatar" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 6h16M4 6v4h16M4 10v4h16M4 14v4h16" /></svg>
-              </div>
               <div className="loading-card chat-bubble chat-bubble-assistant max-w-md">
                 <div className="flex items-center gap-2 mb-1">
                   <div className="flex gap-1">
