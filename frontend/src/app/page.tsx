@@ -20,6 +20,28 @@ type FormData = {
   uf: string;
 };
 
+type SugestaoEmissor = {
+  campo: string;
+  valor: string;
+  origem: 'emissor';
+  confianca: 'forte' | 'fraca';
+};
+
+type CruzamentoEmissor = {
+  status: 'match_forte' | 'match_fraco' | 'sem_match' | 'indisponivel';
+  mensagem: string;
+  sugestoes: SugestaoEmissor[];
+  divergencias_resolvidas: string[];
+  nota: {
+    numero: string;
+    chave: string;
+    situacao: string;
+    data: string;
+    valor: number;
+    tomador: string;
+  } | null;
+};
+
 type RevisaoOcr = {
   arquivo: File;
   urlOriginal: string;
@@ -47,6 +69,7 @@ type RevisaoOcr = {
   confiança: number;
   erros: string[];
   metodoOcr: string;
+  cruzamentoEmissor?: CruzamentoEmissor | null;
 };
 
 const CAMPOS_REVISAO: Array<{ chave: 'cnpj' | 'servico' | 'valor' | 'cidade' | 'uf'; rotulo: string }> = [
@@ -332,8 +355,33 @@ export default function Home() {
       confiança: Number(data['confiança_ocr'] ?? data.confianza_ocr ?? 0),
       erros: data.erros_ocr || [],
       metodoOcr: String(data.metodo_ocr || 'extração multimodal'),
+      cruzamentoEmissor: (data.cruzamento_emissor || null) as CruzamentoEmissor | null,
     };
-    const divergencias = new Set<string>(data.campos_divergentes || []);
+    // Aplica sugestões do emissor (Geranet) quando o cruzamento encontrou a nota.
+    // Match forte: preenche campos vazios/divergentes automaticamente.
+    // Match fraco: apenas registra para exibição no modal (decisão humana).
+    const cruzamento = dadosRevisao.cruzamentoEmissor;
+    let avisoEmissor = '';
+    if (cruzamento && (cruzamento.status === 'match_forte' || cruzamento.status === 'match_fraco')) {
+      const fortes = cruzamento.sugestoes.filter((s) => s.confianca === 'forte');
+      for (const sugestao of fortes) {
+        const campo = sugestao.campo as keyof RevisaoOcr;
+        if (campo in dadosRevisao) {
+          const atual = String(dadosRevisao[campo] ?? '').trim();
+          if (!atual || dadosRevisao.divergencias.includes(sugestao.campo)) {
+            (dadosRevisao as unknown as Record<string, unknown>)[campo] = sugestao.valor;
+          }
+        }
+      }
+      // Campos resolvidos pelo emissor saem da lista de divergências.
+      dadosRevisao.divergencias = dadosRevisao.divergencias.filter(
+        (campo: string) => !cruzamento.divergencias_resolvidas.includes(campo),
+      );
+      const situacaoNota = String(cruzamento.nota?.situacao || '').toLowerCase();
+      const avisoCancelada = situacaoNota.includes('cancel') ? '\n\n🚨 **Atenção:** a nota casada no emissor consta como **CANCELADA**. Confirme se este documento é válido antes de prosseguir.' : '';
+      avisoEmissor = `\n\n🔗 **Cruzamento com o emissor:** ${cruzamento.mensagem} ${fortes.length} campo(s) preenchido(s) com dados oficiais do emissor; os demais aparecem como sugestão no modal.${avisoCancelada}`;
+    }
+    const divergencias = new Set<string>(dadosRevisao.divergencias);
     const camposPerguntar = CAMPOS_REVISAO
       .filter(({ chave }) => {
         const valor = dadosRevisao[chave];
@@ -369,7 +417,7 @@ export default function Home() {
     // O modal deve aparecer sempre, mesmo quando todos os campos parecem
     // inequívocos. A análise só pode começar pela confirmação explícita nele.
     setRevisaoCampoIndex(null);
-    addMessage('assistant', `Extração concluída. Revise e, se necessário, corrija todos os campos no modal antes de confirmar a análise fiscal.${avisoDiscrepancia}`);
+    addMessage('assistant', `Extração concluída. Revise e, se necessário, corrija todos os campos no modal antes de confirmar a análise fiscal.${avisoDiscrepancia}${avisoEmissor}`);
   };
 
   const perguntaCampoRevisao = (chave: RevisaoOcr['camposPerguntar'][number], dados: Pick<RevisaoOcr, 'cnpj' | 'servico' | 'valor' | 'cidade' | 'uf'>, candidatos: Record<string, string[]>, erros: string[] = []) => {
@@ -699,6 +747,29 @@ export default function Home() {
             <a href={revisaoOcr.urlOriginal} target="_blank" rel="noreferrer" className="mt-2 inline-flex text-sm text-[#397b78] underline">Abrir arquivo original: {revisaoOcr.arquivo.name}</a>
             <p className="mt-1 text-xs text-[#758182]">Confiabilidade da extração: <span className={`font-semibold ${nivelConfiabilidade(revisaoOcr).cor}`}>{nivelConfiabilidade(revisaoOcr).rotulo}</span></p>
             {revisaoOcr.erros.length > 0 && <p className="mt-2 text-xs text-[#85672f]">Observações: {revisaoOcr.erros.join('; ')}</p>}
+            {revisaoOcr.cruzamentoEmissor && (revisaoOcr.cruzamentoEmissor.status === 'match_forte' || revisaoOcr.cruzamentoEmissor.status === 'match_fraco') && (
+              <div className="mt-3 rounded-sm border border-[#b9d3cd] bg-[#eef6f3] p-3">
+                <p className="text-xs font-semibold text-[#2d6865]">🔗 Dados do emissor (Geranet) — {revisaoOcr.cruzamentoEmissor.status === 'match_forte' ? 'correspondência confirmada' : 'correspondência a confirmar'}</p>
+                {revisaoOcr.cruzamentoEmissor.nota && (
+                  <p className="mt-1 text-xs text-[#53615e]">
+                    Nota nº {revisaoOcr.cruzamentoEmissor.nota.numero || '—'} · {revisaoOcr.cruzamentoEmissor.nota.data || '—'} · R$ {Number(revisaoOcr.cruzamentoEmissor.nota.valor || 0).toFixed(2)}
+                    {revisaoOcr.cruzamentoEmissor.nota.situacao ? ` · ${revisaoOcr.cruzamentoEmissor.nota.situacao}` : ''}
+                  </p>
+                )}
+                {revisaoOcr.cruzamentoEmissor.sugestoes.length > 0 && (
+                  <ul className="mt-2 space-y-1 text-xs text-[#53615e]">
+                    {revisaoOcr.cruzamentoEmissor.sugestoes.map((sugestao) => (
+                      <li key={`${sugestao.campo}-${sugestao.valor}`}>
+                        <strong>{sugestao.campo}:</strong> {sugestao.valor}
+                        <span className={`ml-2 ${sugestao.confianca === 'forte' ? 'text-[#2d6865]' : 'text-[#a36e27]'}`}>
+                          ({sugestao.confianca === 'forte' ? 'aplicado do emissor' : 'sugestão — confirme'})
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
             {revisaoOcr.texto.trim() && <details className="mt-3 rounded-sm border border-[#dce3df] bg-[#f2f5f1] p-3">
               <summary className="cursor-pointer text-sm text-[#397b78]">Ver texto reconhecido pelo OCR</summary>
               <pre className="mt-3 max-h-48 overflow-auto whitespace-pre-wrap text-xs text-[#53615e]">{revisaoOcr.texto}</pre>

@@ -7,6 +7,7 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { getConfig, Env } from './config';
 import { consultarCnpj, consultarCnpjFallback, emptyEmpresa } from './cnpj';
+import { cruzarComEmissor, deveCruzarComEmissor } from './cruzamento_emissor';
 import { extraerDatosNfse, extraerDatosTexto, generarAnalisis, responderChatFiscal } from './llm';
 import { codificarBase64, decodificarBase64 } from './encoding';
 import { buscarOnline, formatearBuscaParaLlm } from './busca';
@@ -709,6 +710,30 @@ app.post('/api/analisar', async (c) => {
 
     // Anexo nunca inicia análise diretamente: exige leitura/revisão confirmada pelo usuário.
     if (archivo instanceof File && !dadosConfirmados) {
+      // Cruzamento com o emissor (Geranet): só quando o OCR tem divergências
+      // ou confiança baixa. Falha é silenciosa — nunca bloqueia o fluxo.
+      let cruzamento: Awaited<ReturnType<typeof cruzarComEmissor>> | null = null;
+      try {
+        const cnpjCruzamento = String(datosExtraidos.cnpj || '').replace(/\D/g, '');
+        if (deveCruzarComEmissor(resultadoOcr?.campos_divergentes || [], resultadoOcr?.confianza ?? 0, {
+          cnpj: cnpjCruzamento,
+          numero_nfse: String(datosExtraidos.numero_nfse || ''),
+          valor: Number(datosExtraidos.valor || 0),
+          data_emissao: String(datosExtraidos.data_emissao || ''),
+          cnpj_tomador: String(datosExtraidos.cnpj_tomador || ''),
+        })) {
+          cruzamento = await cruzarComEmissor({
+            cnpj: cnpjCruzamento,
+            numero_nfse: String(datosExtraidos.numero_nfse || ''),
+            valor: Number(datosExtraidos.valor || 0),
+            data_emissao: String(datosExtraidos.data_emissao || ''),
+            cnpj_tomador: String(datosExtraidos.cnpj_tomador || ''),
+          }, env);
+        }
+      } catch (e) {
+        console.error('[Cruzamento emissor] falhou:', e);
+      }
+
       return c.json({
         status: 'revisao_necessaria',
         mensagem: 'Confira os dados extraídos no documento original antes de iniciar a análise fiscal.',
@@ -720,6 +745,20 @@ app.post('/api/analisar', async (c) => {
         metodo_ocr: resultadoOcr?.metodo || '',
         campos_divergentes: resultadoOcr?.campos_divergentes || [],
         erros_ocr: resultadoOcr?.erros || [],
+        cruzamento_emissor: cruzamento ? {
+          status: cruzamento.status,
+          mensagem: cruzamento.mensagem || '',
+          sugestoes: cruzamento.sugestoes,
+          divergencias_resolvidas: cruzamento.divergencias_resolvidas,
+          nota: cruzamento.nota ? {
+            numero: cruzamento.nota.numero_nota,
+            chave: cruzamento.nota.chave,
+            situacao: cruzamento.nota.situacion,
+            data: cruzamento.nota.data_emision,
+            valor: cruzamento.nota.valor,
+            tomador: cruzamento.nota.tomador_nombre,
+          } : null,
+        } : null,
       });
     }
 
