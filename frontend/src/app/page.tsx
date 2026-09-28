@@ -566,6 +566,25 @@ export default function Home() {
     await enviarDatosConferidos(revisao);
   };
 
+  // Auto-confirmação: com confiabilidade alta/muito alta, se o usuário não
+  // interagir com o modal em 20s, ele fecha sozinho e a análise segue.
+  // Confiabilidade média/baixa nunca fecha sozinha — só com confirmação humana.
+  const TEMPO_AUTO_CONFIRMACAO_MS = 20000;
+  useEffect(() => {
+    if (!revisaoOcr || revisaoCampoIndex !== null) return;
+    const nivel = nivelConfiabilidade(revisaoOcr).rotulo;
+    if (nivel !== 'Alta' && nivel !== 'Muito alta') return;
+    const timer = setTimeout(() => {
+      setRevisaoOcr((prev) => {
+        if (!prev) return prev;
+        addMessage('assistant', '✅ **Conferência automática concluída:** a leitura teve confiabilidade alta e nenhuma correção foi feita em 20 segundos. Seguindo com a análise com os dados extraídos.');
+        confirmarRevisaoOcr();
+        return prev;
+      });
+    }, TEMPO_AUTO_CONFIRMACAO_MS);
+    return () => clearTimeout(timer);
+  }, [revisaoOcr, revisaoCampoIndex]);
+
   const enviarMensagem = async (texto: string, arquivo?: File | null) => {
     if (revisaoOcr) {
       if (arquivo) {
