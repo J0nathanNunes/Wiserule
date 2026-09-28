@@ -123,9 +123,11 @@ O relatório DEVE conter estas seções obrigatórias (nesta ordem):
 
 ## ⚖️ Legislação Aplicável
 - Apenas as normas que efetivamente se aplicam ao caso, com uma frase de por quê cada uma.
+- Se houver referência IBPT disponível no contexto, cite a alíquota municipal de referência com fonte e vigência nesta seção ou na de retenções.
 
 ## 🧮 Análise de Retenções
 - ISS, IRRF, CSLL, COFINS, PIS conforme enquadramento (preferir tabela: tributo | retido? | base | observação).
+- Se houver referência IBPT, use a alíquota municipal como referência citada (ex.: "referência IBPT: X% (tabela Y, vigente até Z)") e destaque divergência com a alíquota declarada na NFS-e como observação — não conclua erro automaticamente.
 
 ## 📍 Local de Pagamento do ISS
 - Conforme Art. 3º LC 116/2003, aplicado ao caso em uma ou duas linhas.

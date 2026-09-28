@@ -8,6 +8,7 @@ import { cors } from 'hono/cors';
 import { getConfig, Env } from './config';
 import { consultarCnpj, consultarCnpjFallback, emptyEmpresa } from './cnpj';
 import { cruzarComEmissor, deveCruzarComEmissor } from './cruzamento_emissor';
+import { consultarAliquotaServico, formatarIbptParaLlm } from './ibpt';
 import { extraerDatosNfse, extraerDatosTexto, generarAnalisis, responderChatFiscal } from './llm';
 import { codificarBase64, decodificarBase64 } from './encoding';
 import { buscarOnline, formatearBuscaParaLlm } from './busca';
@@ -825,12 +826,19 @@ app.post('/api/analisar', async (c) => {
     const correlacion = correlacionarPorCnae(empresa.cnae_codigo, `${servico} ${codigoServicoNfse}`.trim());
     const correlacionFormatada = formatarCorrelacaoParaLlm(correlacion);
 
-    // --- FASE 3: Búsqueda online ---
+    // --- FASE 3: Búsqueda online + referência IBPT (em paralelo) ---
     await actualizarEtapa('Consultando legislação aplicable...', 40);
     const cnaeStr = empresa.cnae || servico;
     const pregunta = `${cnaeStr} ${servico} retenção ISS ${cidade} ${uf} LC 116 legislação`;
-    const resultadosBusca = await buscarOnline(pregunta, env);
+    // Código para consulta IBPT: prioriza o item LC 116 da correlação;
+    // usa o código da NFS-e como alternativa quando a correlação não resolve.
+    const codigoIbpt = correlacion.lc116 || itemListaLc116 || codigoServicoNfse;
+    const [resultadosBusca, resultadoIbpt] = await Promise.all([
+      buscarOnline(pregunta, env),
+      consultarAliquotaServico(cnpjLimpio, codigoIbpt, uf, servico, valor, config, env),
+    ]);
     const buscaFormatada = formatearBuscaParaLlm(resultadosBusca);
+    const ibptFormatado = formatarIbptParaLlm(resultadoIbpt);
 
     // --- FASE 4: Clasificación fiscal ---
     await actualizarEtapa('Calculando retenções e tributos...', 60);
@@ -908,6 +916,7 @@ app.post('/api/analisar', async (c) => {
       cidade,
       uf,
       busca_formatada: buscaFormatada,
+      referencia_ibpt: ibptFormatado,
       clasificacion_fiscal: clasificacionFiscal,
       confianza_ocr: resultadoOcr?.confianza,
       campos_divergentes_ocr: resultadoOcr?.campos_divergentes,

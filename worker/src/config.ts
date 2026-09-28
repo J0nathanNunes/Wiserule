@@ -15,6 +15,10 @@ export interface Env {
   GERANET_CERT_PASSWORD?: string;
   GERANET_CERTS_JSON?: string;
   AUTH_BOOTSTRAP_SECRET?: string;
+  IBPT_TOKENS_JSON?: string;
+  IBPT_TOKEN?: string;
+  IBPT_CNPJ?: string;
+  IBPT_BASE_URL?: string;
 
   // Vars (configurados en wrangler.toml)
   APP_NAME?: string;
@@ -36,6 +40,7 @@ export function getConfig(env: Env) {
     minhaReceitaUrl: env.MINHA_RECEITA_URL || 'https://minhareceita.org',
     openrouterBaseUrl: env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1',
     geranetBaseUrl: env.GERANET_BASE_URL || 'https://nfe.geranet.net/api/v1',
+    ibptBaseUrl: env.IBPT_BASE_URL || 'https://apidoni.ibpt.org.br/api/v1',
     maxFileSizeMb: parseInt(env.MAX_FILE_SIZE_MB || '5', 10),
     modeloOcr: env.MODELO_OCR || 'minimax/minimax-m3',
     modeloAnalise: env.MODELO_ANALISE || 'openai/gpt-5.4-mini',

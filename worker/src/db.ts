@@ -85,6 +85,54 @@ export async function salvarCacheEmissor(
   }
 }
 
+// --- Cache de referências IBPT por código LC116/NBS + UF ---
+
+/** TTL do cache IBPT em segundos (24h — a tabela tem vigência semanal/mensal). */
+export const TTL_CACHE_IBPT_SEGUNDOS = 24 * 60 * 60;
+
+/** Busca a alíquota IBPT em cache para o código+UF, se ainda válida. */
+export async function obterCacheIbpt(
+  db: D1Database,
+  codigo: string,
+  uf: string,
+): Promise<string | null> {
+  try {
+    const res = await db
+      .prepare(
+        `SELECT resposta FROM cache_ibpt_aliquotas
+         WHERE codigo = ? AND uf = ? AND criado_em > datetime('now', '-${TTL_CACHE_IBPT_SEGUNDOS} seconds')
+         ORDER BY criado_em DESC LIMIT 1`
+      )
+      .bind(codigo, uf)
+      .first<{ resposta: string }>();
+    return res?.resposta || null;
+  } catch (e) {
+    console.error('[DB] Erro ao ler cache IBPT:', e);
+    return null;
+  }
+}
+
+/** Salva (ou substitui) a alíquota IBPT em cache para o código+UF. */
+export async function salvarCacheIbpt(
+  db: D1Database,
+  codigo: string,
+  uf: string,
+  resposta: string,
+): Promise<void> {
+  try {
+    await db
+      .prepare(
+        `INSERT INTO cache_ibpt_aliquotas (codigo, uf, resposta, criado_em)
+         VALUES (?, ?, ?, datetime('now'))
+         ON CONFLICT(codigo, uf) DO UPDATE SET resposta = excluded.resposta, criado_em = datetime('now')`
+      )
+      .bind(codigo, uf, resposta)
+      .run();
+  } catch (e) {
+    console.error('[DB] Erro ao salvar cache IBPT:', e);
+  }
+}
+
 export async function listarAnalises(db: D1Database, limite = 20): Promise<Analise[]> {
   try {
     const res = await db
