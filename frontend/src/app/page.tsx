@@ -326,6 +326,116 @@ export default function Home() {
     }
   };
 
+  // --- Coerência entre Serviço Prestado (LC 116) e Descrição do Serviço ---
+
+  // Palavras genéricas que não ajudam a distinguir serviços.
+  const PALAVRAS_VAZIAS = new Set([
+    'servico', 'servicos', 'prestacao', 'prestacao', 'empresa', 'atividade',
+    'execucao', 'realizacao', 'contrato', 'valor', 'total', 'nota', 'fiscal',
+    'conforme', 'segundo', 'sobre', 'para', 'com', 'uma', 'dos', 'das', 'como',
+    'mais', 'outros', 'outras', 'congeneres', 'congeneres', 'afins', 'correlatos',
+    'inclusive', 'entre', 'pela', 'pelo', 'nao', 'tipo', 'tipos', 'forma',
+  ]);
+
+  // Grupos de equivalência: palavras dentro do mesmo grupo contam como
+  // coincidência (sinônimos, variações e ações similares do mesmo serviço).
+  const GRUPOS_EQUIVALENCIA: string[][] = [
+    ['dedetiz', 'desinsetiz', 'desinsetac', 'desinfecc', 'desinfestac', 'pulveriz', 'saneament', 'praga'],
+    ['higieniz', 'higienizac', 'limpez', 'limp', 'sanitiz', 'desinfec'],
+    ['desratiz', 'rato', 'roedor', 'controle'],
+    ['imuniz', 'vacina', 'profilax'],
+    ['limp', 'limpez'],
+    ['construc', 'construcao', 'obra', 'reforma', 'edific'],
+    ['repar', 'manuten', 'conservac', 'consert'],
+    ['instalac', 'instal', 'montagem', 'monta'],
+    ['pintur', 'pint', 'pinta'],
+    ['jardin', 'paisagis', 'paisag', 'pod'],
+    ['portar', 'vigilanc', 'seguranc', 'guarda'],
+    ['limp', 'faxin'],
+    ['transport', 'frete', 'carga', 'mudanc', 'logistic'],
+    ['locac', 'aluguel', 'aluga'],
+    ['comput', 'informatic', 'sistem', 'softwar', 'program', 'ti ', 'dados'],
+    ['contab', 'fiscal', 'escriturac', 'contabil'],
+    ['advocac', 'advocatic', 'juridic', 'advogad'],
+    ['medic', 'saude', 'clinic', 'consult'],
+    ['ensin', 'educac', 'treinament', 'capacitac', 'curs', 'instru'],
+    ['comunic', 'publicidad', 'propaganda', 'marketing', 'divulgac'],
+    ['grafic', 'impress', 'impressao', 'impresso'],
+    ['event', 'fest', 'show', 'espetacul'],
+    ['aliment', 'restaurante', 'lanch', 'cozinh', 'refeic'],
+    ['belez', 'estetic', 'cabel', 'cabeleireir', 'salao'],
+    ['vigilancia-sanitaria', 'sanitaria'],
+    ['engenh', 'arquitet', 'projeto', 'laud'],
+    ['eletric', 'eletricid'],
+    ['hidraul', 'encan', 'tubulac'],
+    ['sold', 'metalurg', 'serralher'],
+    ['carpint', 'marcen', 'madeir'],
+    ['veicul', 'automovel', 'carro', 'motor'],
+    ['maquin', 'equipament', 'aparelh'],
+    ['armazen', 'deposit', 'guarda', 'warehous', 'estocagem'],
+    ['segur', 'seguran'],
+    ['faxin', 'zelador'],
+  ];
+
+  /** Remove acentos e normaliza para comparação. */
+  const normalizarTexto = (texto: string): string =>
+    texto
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+  /** Radical da palavra (prefixo comum para tolerar variações de terminação). */
+  const radical = (palavra: string): string => palavra.slice(0, Math.max(5, Math.ceil(palavra.length * 0.7)));
+
+  /**
+   * Similaridade entre o texto legal do serviço (LC 116) e a descrição
+   * livre do prestador. Retorna 0..1.
+   */
+  const calcularSimilitudServico = (servicoLegal: string, descricaoLivre: string): number => {
+    const normLegal = normalizarTexto(servicoLegal);
+    const normDesc = normalizarTexto(descricaoLivre);
+    if (!normLegal || !normDesc) return 0;
+
+    const palavrasLegal = normLegal.split(' ').filter((p) => p.length > 3 && !PALAVRAS_VAZIAS.has(p));
+    const palavrasDesc = normDesc.split(' ').filter((p) => p.length > 3 && !PALAVRAS_VAZIAS.has(p));
+    if (palavrasLegal.length === 0 || palavrasDesc.length === 0) return 0;
+
+    const radicaisDesc = new Set(palavrasDesc.map(radical));
+    const radicaisLegal = new Set(palavrasLegal.map(radical));
+
+    // Grupos de equivalência presentes em cada texto.
+    const gruposLegal = GRUPOS_EQUIVALENCIA.filter((grupo) =>
+      grupo.some((termo) => normLegal.includes(termo)));
+    const gruposDesc = GRUPOS_EQUIVALENCIA.filter((grupo) =>
+      grupo.some((termo) => normDesc.includes(termo)));
+    const gruposComuns = gruposLegal.filter((g) => gruposDesc.includes(g)).length;
+
+    let coincidencias = 0;
+    for (const palavra of palavrasLegal) {
+      const rad = radical(palavra);
+      // Coincidência exata ou por radical (ex.: dedetização/dedetizacão).
+      if (radicaisDesc.has(rad)) {
+        coincidencias += 1;
+        continue;
+      }
+      // Coincidência por prefixo curto (ex.: higienização/higienização parcial).
+      const prefixo = palavra.slice(0, 5);
+      if (prefixo.length >= 5 && Array.from(radicaisDesc).some((r) => r.startsWith(prefixo) || palavra.startsWith(r.slice(0, 5)))) {
+        coincidencias += 0.75;
+      }
+    }
+
+    // Grupos equivalentes valem como coincidências (peso 1 por grupo comum).
+    const base = Math.max(palavrasLegal.length, 1);
+    const pontuacao = (coincidencias + gruposComuns) / base;
+    // Bônus: se a descrição contém o radical de alguma palavra-chave forte do texto legal.
+    const contemChave = palavrasLegal.some((p) => normDesc.includes(radical(p)));
+    return Math.min(1, pontuacao + (contemChave ? 0.15 : 0));
+  };
+
   const abrirRevisaoOcr = async (arquivo: File, texto: string, dadosIniciais: FormData | undefined, data: any) => {
     const extraidos = data.dados_extraidos || {};
     const dadosRevisao = {
@@ -400,18 +510,16 @@ export default function Home() {
     const revisao = { ...dadosRevisao, camposPerguntar };
     setRevisaoOcr(revisao);
     // Verifica coerência entre "Serviço Prestado" (código, para tributação) e
-    // "Descrição do Serviço" (informativo). Se há discrepancia grande, avisa.
+    // "Descrição do Serviço" (informativo). A descrição é escrita pelo prestador
+    // e nunca será idêntica ao texto legal da LC 116 — a comparação considera
+    // normalização, radicais, sinônimos e grupos de serviços equivalentes.
     const servicoPrestado = revisao.servico.trim();
     const descricaoServicio = revisao.servico_descricao.trim();
     let avisoDiscrepancia = '';
     if (servicoPrestado && descricaoServicio) {
-      const palavrasServicio = new Set(servicoPrestado.toLowerCase().split(/\W+/).filter((p) => p.length > 3));
-      const palavrasDescricao = new Set(descricaoServicio.toLowerCase().split(/\W+/).filter((p) => p.length > 3));
-      const coincidencias = Array.from(palavrasServicio).filter((p) => palavrasDescricao.has(p)).length;
-      const total = Math.max(palavrasServicio.size, 1);
-      const similitud = coincidencias / total;
-      if (similitud < 0.3) {
-        avisoDiscrepancia = `\n\n⚠️ **Verifique o serviço:** o "Serviço Prestado" declarado ("${servicoPrestado.slice(0, 120)}...") não parece coincidir com a "Descrição do Serviço" ("${descricaoServicio.slice(0, 120)}..."). Para a análise fiscal se usará o código do "Serviço Prestado", que é o único válido a fins tributários. Confirme que o documento é correto.`;
+      const similitud = calcularSimilitudServico(servicoPrestado, descricaoServicio);
+      if (similitud < 0.25) {
+        avisoDiscrepancia = `\n\n⚠️ **Verifique o serviço:** o "Serviço Prestado" declarado ("${servicoPrestado.slice(0, 120)}...") não parece corresponder à "Descrição do Serviço" ("${descricaoServicio.slice(0, 120)}..."). Pode ser apenas redação diferente, mas confirme que o documento é o correto. Para a análise fiscal se usará o código do "Serviço Prestado", que é o único válido a fins tributários.`;
       }
     }
     // O modal deve aparecer sempre, mesmo quando todos os campos parecem
