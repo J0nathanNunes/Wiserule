@@ -156,7 +156,10 @@ Nunca escreva "não informada na nota" para um dado que existe em "tomador_cadas
 - Se aplica ou não, em uma ou duas linhas.
 
 ## 🧾 INSS - Cota Patronal
-- Aplica ou não, com base legal em uma linha.
+- CONTEXTO: nesta análise a cota patronal se refere EXCLUSIVAMENTE à retenção incidente sobre serviços prestados POR TERCEIROS via NFS-e (reembolso/contratação de serviço com mão de obra), NÃO à cota patronal da folha de pagamento da empresa (20% sobre remunerações).
+- A aplicação é RESTRITA aos serviços definidos em lei (art. 31 da Lei 8.212/1991: construção civil, vigilância, limpeza/conserve e rural — quando prestados por MEI/ME/EPP e contratados por contribuinte obrigado) e ao tomador enquadrado como obrigado a reter.
+- Se o prestador é MEI e o serviço NÃO está na lista do art. 31, escreva que não há retenção de cota patronal sobre a nota.
+- Responda em 1-3 linhas: aplica ou não, qual serviço da lista se enquadra (se houver) e a base legal. Não generalize para a folha de pagamento.
 
 ## 💬 Opiniões da Comunidade
 - Máximo 3 fontes, uma linha por fonte, só se forem relevantes ao caso.
