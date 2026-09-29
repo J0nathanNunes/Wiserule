@@ -124,7 +124,10 @@ Cada informação em sua própria linha, no formato "**Rótulo:** valor" (uma li
 - Demais dados (endereço, telefone, CNAEs secundários) só se forem relevantes para a análise — cada um em sua linha.
 
 ## 🧑‍💼 Dados do Tomador
-Mesmo formato, uma informação por linha. Use apenas os dados disponíveis no contexto (CNPJ, razão social, município/UF). Se não houver dados do tomador, escreva apenas: "Tomador não informado na nota."
+Mesmo formato, uma informação por linha. Fontes de dados do tomador, em ordem:
+1. O campo "cnpj_tomador" do bloco nfse (CNPJ).
+2. O objeto "tomador_cadastro" do bloco nfse (razão social, município/UF e situação cadastral consultados na Receita a partir do CNPJ do tomador) — use-o para preencher razão social e município/UF; cite que os dados vêm da consulta cadastral do CNPJ informado na nota.
+Nunca escreva "não informada na nota" para um dado que existe em "tomador_cadastro". Só use "Tomador não informado na nota." quando nem CNPJ nem cadastro existirem.
 
 ## 🏢 Enquadramento Fiscal
 - **Simples Nacional:** Sim/Não/Não informado

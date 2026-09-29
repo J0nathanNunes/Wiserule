@@ -840,6 +840,36 @@ app.post('/api/analisar', async (c) => {
     const buscaFormatada = formatearBuscaParaLlm(resultadosBusca);
     const ibptFormatado = formatarIbptParaLlm(resultadoIbpt);
 
+    // Cadastro do tomador (quando o CNPJ dele consta na nota): alimenta a
+    // seção "Dados do Tomador" do relatório. Falha é silenciosa.
+    let tomadorCadastro: { razao_social: string; municipio: string; uf: string; situacao: string } | null = null;
+    const cnpjTomadorLimpo = cnpjTomador.replace(/\D/g, '');
+    if (cnpjTomadorLimpo.length === 14 && cnpjTomadorLimpo !== cnpjLimpio) {
+      try {
+        const cadastroTomador = await consultarCnpj(cnpjTomadorLimpo, config.minhaReceitaUrl);
+        if (cadastroTomador.razao_social && !(cadastroTomador.situacao || '').startsWith('Erro')) {
+          tomadorCadastro = {
+            razao_social: cadastroTomador.razao_social,
+            municipio: cadastroTomador.municipio || '',
+            uf: cadastroTomador.uf || '',
+            situacao: cadastroTomador.situacao || '',
+          };
+        } else {
+          const fallbackTomador = await consultarCnpjFallback(cnpjTomadorLimpo);
+          if (fallbackTomador.razao_social) {
+            tomadorCadastro = {
+              razao_social: fallbackTomador.razao_social,
+              municipio: fallbackTomador.municipio || '',
+              uf: fallbackTomador.uf || '',
+              situacao: fallbackTomador.situacao || '',
+            };
+          }
+        }
+      } catch (e) {
+        console.error('[Tomador] Falha ao consultar cadastro:', e);
+      }
+    }
+
     // --- FASE 4: Clasificación fiscal ---
     await actualizarEtapa('Calculando retenções e tributos...', 60);
     const lc116Codigo = correlacion.lc116;
@@ -897,6 +927,7 @@ app.post('/api/analisar', async (c) => {
         data_emissao: dataEmissao,
         cnpj_prestador: cnpjLimpio,
         cnpj_tomador: cnpjTomador,
+        tomador_cadastro: tomadorCadastro,
         codigo_servico: codigoServicoNfse,
         item_lista_lc116: itemListaLc116,
         descricao_servico: servico,
