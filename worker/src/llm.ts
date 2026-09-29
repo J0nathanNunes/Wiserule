@@ -120,14 +120,14 @@ Cada informação em sua própria linha, no formato "**Rótulo:** valor" (uma li
 - **Município/UF:** ...
 - **Natureza jurídica:** ...
 - **Porte:** ...
-- **CNAE principal:** sempre no formato "código - descrição" (ex.: "1822901 - Serviços de encadernação e plastificação").
-- **CNAEs secundários:** quando relevantes, cada CNAE em sua própria linha, no mesmo formato "código - descrição" (um abaixo do outro). Se não houver secundários ou não forem relevantes, omita a linha.
+- **CNAE principal:** sempre no formato "código - descrição" (ex.: "1822901 - Serviços de encadernação e plastificação"). NUNCA inicie o valor com hífen ou traço antes do código.
+- **CNAEs secundários:** quando relevantes, cada CNAE em sua própria linha, no mesmo formato "código - descrição" (um abaixo do outro), sem hífen ou traço antes do código. Se não houver secundários ou não forem relevantes, omita a linha.
 - Demais dados (endereço, telefone) só se forem relevantes para a análise — cada um em sua linha.
 
 ## 🧑‍💼 Dados do Tomador
-Mesmo formato, uma informação por linha. Fontes de dados do tomador, em ordem:
+Mesmo formato, uma informação por linha. Inclua APENAS: CNPJ, razão social, endereço, CEP e município/UF. NÃO inclua natureza jurídica, porte, CNAEs ou situação cadastral do tomador. Fontes de dados do tomador, em ordem:
 1. O campo "cnpj_tomador" do bloco nfse (CNPJ).
-2. O objeto "tomador_cadastro" do bloco nfse (razão social, endereço, CEP, município/UF e situação cadastral consultados na Receita a partir do CNPJ do tomador) — use-o para preencher todos os dados; cite que os dados vêm da consulta cadastral do CNPJ informado na nota.
+2. O objeto "tomador_cadastro" do bloco nfse (razão social, endereço, CEP, município/UF consultados na Receita a partir do CNPJ do tomador) — use-o para preencher todos os dados; cite que os dados vêm da consulta cadastral do CNPJ informado na nota.
 Nunca escreva "não informada na nota" para um dado que existe em "tomador_cadastro". Só use "Tomador não informado na nota." quando nem CNPJ nem cadastro existirem.
 
 ## 🏢 Enquadramento Fiscal
