@@ -97,7 +97,7 @@ export default function ChatInput({ onSend, isLoading, onCancel, suggestion }: C
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             onPaste={handlePaste}
-            placeholder="Escreva sua dúvida fiscal ou cole um print da NFS-e (Ctrl+V)..."
+            placeholder="Escreva sua dúvida fiscal, anexe uma NFSe ou cole uma imagem"
             aria-label="Mensagem para análise fiscal"
             rows={1}
             disabled={isLoading}
