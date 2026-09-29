@@ -842,7 +842,7 @@ app.post('/api/analisar', async (c) => {
 
     // Cadastro do tomador (quando o CNPJ dele consta na nota): alimenta a
     // seção "Dados do Tomador" do relatório. Falha é silenciosa.
-    let tomadorCadastro: { razao_social: string; municipio: string; uf: string; situacao: string } | null = null;
+    let tomadorCadastro: { razao_social: string; endereco: string; cep: string; municipio: string; uf: string; situacao: string } | null = null;
     const cnpjTomadorLimpo = cnpjTomador.replace(/\D/g, '');
     if (cnpjTomadorLimpo.length === 14 && cnpjTomadorLimpo !== cnpjLimpio) {
       try {
@@ -850,6 +850,8 @@ app.post('/api/analisar', async (c) => {
         if (cadastroTomador.razao_social && !(cadastroTomador.situacao || '').startsWith('Erro')) {
           tomadorCadastro = {
             razao_social: cadastroTomador.razao_social,
+            endereco: cadastroTomador.endereco || '',
+            cep: cadastroTomador.cep || '',
             municipio: cadastroTomador.municipio || '',
             uf: cadastroTomador.uf || '',
             situacao: cadastroTomador.situacao || '',
@@ -859,6 +861,8 @@ app.post('/api/analisar', async (c) => {
           if (fallbackTomador.razao_social) {
             tomadorCadastro = {
               razao_social: fallbackTomador.razao_social,
+              endereco: fallbackTomador.endereco || '',
+              cep: fallbackTomador.cep || '',
               municipio: fallbackTomador.municipio || '',
               uf: fallbackTomador.uf || '',
               situacao: fallbackTomador.situacao || '',
