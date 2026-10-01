@@ -314,6 +314,15 @@ export default function Home() {
       const data = await response.json();
       const t1 = Date.now();
       addMessage('assistant', `⏳ **Extraendo informações...** · ${((t1 - t0) / 1000).toFixed(1)}s`);
+      // Layout nacional + confiabilidade alta: o backend dispensou a revisão e
+      // iniciou a análise direto (sem modal humano).
+      if (data.status === 'procesando' && data.dados_extraidos?.task_id) {
+        addMessage('assistant', '✅ **Leitura de alta confiabilidade** (nota do ambiente nacional, sem divergências). Análise iniciada automaticamente sem confirmação manual.');
+        const assistantMsg = addMessage('assistant', '⏳ **Analisando...**');
+        tarefaCanceladaRef.current = false;
+        pollTask(data.dados_extraidos.task_id, assistantMsg.id);
+        return;
+      }
       if (!response.ok || data.status !== 'revisao_necessaria') {
         throw new Error(data.error || data.mensagem || `HTTP ${response.status}`);
       }
@@ -674,24 +683,10 @@ export default function Home() {
     await enviarDatosConferidos(revisao);
   };
 
-  // Auto-confirmação: com confiabilidade alta/muito alta, se o usuário não
-  // interagir com o modal em 20s, ele fecha sozinho e a análise segue.
-  // Confiabilidade média/baixa nunca fecha sozinha — só com confirmação humana.
-  const TEMPO_AUTO_CONFIRMACAO_MS = 20000;
-  useEffect(() => {
-    if (!revisaoOcr || revisaoCampoIndex !== null) return;
-    const nivel = nivelConfiabilidade(revisaoOcr).rotulo;
-    if (nivel !== 'Alta' && nivel !== 'Muito alta') return;
-    const timer = setTimeout(() => {
-      setRevisaoOcr((prev) => {
-        if (!prev) return prev;
-        addMessage('assistant', '✅ **Conferência automática concluída:** a leitura teve confiabilidade alta e nenhuma correção foi feita em 20 segundos. Seguindo com a análise com os dados extraídos.');
-        confirmarRevisaoOcr();
-        return prev;
-      });
-    }, TEMPO_AUTO_CONFIRMACAO_MS);
-    return () => clearTimeout(timer);
-  }, [revisaoOcr, revisaoCampoIndex]);
+  // Sem auto-confirmação automática: notas de layout antigo e notas do layout
+  // nacional com confiança abaixo de alta exigem confirmação humana sempre
+  // (o backend decide a política). Notas do layout nacional com confiabilidade
+  // alta nem abrem o modal — a análise inicia direto no backend.
 
   const enviarMensagem = async (texto: string, arquivo?: File | null) => {
     if (revisaoOcr) {

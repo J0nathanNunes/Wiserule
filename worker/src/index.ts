@@ -574,7 +574,254 @@ app.post('/api/chat', async (c) => {
   }
 });
 
-// An+�lisis de NFSe
+/**
+ * Fluxo de análise confirmada: valida os dados e inicia a tarefa no Durable
+ * Object (Fases 2-6). Usado tanto pela confirmação humana no modal quanto pela
+ * dispensa de revisão (layout nacional + confiança alta), com o mesmo código.
+ */
+async function processarAnaliseConfirmada(
+  c: any,
+  env: any,
+  config: any,
+  form: FormData,
+  archivo: File | null,
+  cruzamento: { status: string; mensagem?: string; sugestoes: Array<{ campo: string; confianca: 'forte' | 'fraca' }>; divergencias_resolvidas: string[] } | null,
+  textoLayout: string,
+  layoutNacional: boolean,
+): Promise<Response> {
+  const extraer = (campo: string) => form.get(campo)?.toString() || '';
+  const cnpjForm = extraer('cnpj');
+  const servico = extraer('servico');
+  const servicoDescricao = extraer('servico_descricao');
+  const cnpjTomador = extraer('cnpj_tomador');
+  const codigoServicoNfse = extraer('codigo_servico_nfse');
+  const itemListaLc116 = extraer('item_lista_lc116');
+  const valorForm = extraer('valor');
+  const valorLiquidoForm = extraer('valor_liquido');
+  const retencaoIssNfse = extraer('iss_retencao');
+  const numeroNfse = extraer('numero_nfse');
+  const dataEmissao = extraer('data_emissao');
+  const simplesNacionalNfse = extraer('simples_nacional_nfse');
+  const meiNfse = extraer('mei_nfse') === 'true';
+  const cidade = extraer('cidade');
+  const uf = extraer('uf');
+
+  const valor = parseValorMonetario(valorForm);
+  const valorLiquido = valorLiquidoForm ? parseValorMonetario(valorLiquidoForm) : undefined;
+
+  // Origem de cada campo da nota: emissor (Geranet) > usuário > OCR.
+  const origemDados: Record<string, string> = {
+    numero: numeroNfse ? 'OCR' : 'não extraído',
+    data_emissao: dataEmissao ? 'OCR' : 'não extraído',
+    cnpj_prestador: 'OCR',
+    cnpj_tomador: cnpjTomador ? 'OCR' : 'não extraído',
+    codigo_servico: codigoServicoNfse ? 'OCR' : 'não extraído',
+    valor_bruto: valorForm ? 'OCR' : 'não extraído',
+    valor_liquido: valorLiquidoForm ? 'OCR' : 'não extraído',
+    iss_retencao_declarada: retencaoIssNfse ? 'OCR' : 'não extraído',
+  };
+  if (cruzamento && cruzamento.sugestoes) {
+    for (const sugestao of cruzamento.sugestoes) {
+      if (sugestao.confianca === 'forte') {
+        const mapa: Record<string, string> = {
+          numero_nfse: 'numero',
+          valor: 'valor_bruto',
+          valor_liquido: 'valor_liquido',
+          data_emissao: 'data_emissao',
+          cnpj_tomador: 'cnpj_tomador',
+          codigo_servico_nfse: 'codigo_servico',
+          iss_retencao: 'iss_retencao_declarada',
+        };
+        const chave = mapa[sugestao.campo];
+        if (chave) origemDados[chave] = 'emissor (Geranet)';
+      }
+    }
+  }
+
+  if (servico.trim().length < 3 || cidade.trim().length < 2 || !uf || valor <= 0) {
+    return c.json({
+      status: 'error',
+      error: 'Dados insuficientes. Confirme CNPJ do prestador, serviço, valor, cidade e UF da NFSe.',
+    }, 422);
+  }
+
+  const cnpjLimpio = cnpjForm.replace(/\D/g, '');
+  if (!validarCnpj(cnpjLimpio)) {
+    return c.json({ status: 'error', error: 'O CNPJ informado/extraído é inválido. Confirme o CNPJ do prestador na NFSe.' }, 422);
+  }
+  if (!validarUf(uf)) {
+    return c.json({ status: 'error', error: `UF inválida: ${uf}. Confirme a UF do município de prestação.` }, 422);
+  }
+
+  // --- FASE 2: Consultas paralelas ---
+  const taskId = generarTaskId();
+  const id = env.DB ? `${taskId}` : taskId;
+  const doId = env.TAREA_ANALISIS.idFromName(id);
+  const doObj = env.TAREA_ANALISIS.get(doId);
+  await doObj.fetch(`https://tarea/${id}/inicializar`, {
+    method: 'POST',
+    body: JSON.stringify({ id: taskId }),
+  });
+
+  const inicioEm = new Date().toISOString();
+  const actualizarEtapa = (etapa: string, progreso: number) =>
+    doObj.fetch(`https://tarea/${id}/actualizar`, {
+      method: 'POST',
+      body: JSON.stringify({ status: 'procesando', progreso, etapa_actual: etapa, inicio_em: inicioEm }),
+    });
+
+  await actualizarEtapa('Consultando Receita Federal...', 20);
+  const empresa = await consultarCnpj(cnpjLimpio, config.minhaReceitaUrl);
+  if (!empresa.razao_social && empresa.situacao && empresa.situacao.startsWith('Erro')) {
+    const fallback = await consultarCnpjFallback(cnpjLimpio);
+    if (fallback.razao_social) {
+      Object.assign(empresa, fallback);
+    }
+  }
+  const correlacion = correlacionarPorCnae(empresa.cnae_codigo, `${servico} ${codigoServicoNfse}`.trim());
+  const correlacionFormatada = formatarCorrelacaoParaLlm(correlacion);
+
+  // --- FASE 3: Búsqueda online + referência IBPT (em paralelo) ---
+  await actualizarEtapa('Consultando legislação aplicable...', 40);
+  const cnaeStr = empresa.cnae || servico;
+  const pregunta = `${cnaeStr} ${servico} retenção ISS ${cidade} ${uf} LC 116 legislação`;
+  const codigoIbpt = correlacion.lc116 || itemListaLc116 || codigoServicoNfse;
+  const [resultadosBusca, resultadoIbpt] = await Promise.all([
+    buscarOnline(pregunta, env),
+    consultarAliquotaServico(cnpjLimpio, codigoIbpt, uf, servico, valor, config, env),
+  ]);
+  const buscaFormatada = formatearBuscaParaLlm(resultadosBusca);
+  const ibptFormatado = formatarIbptParaLlm(resultadoIbpt);
+
+  // Cadastro do tomador (quando o CNPJ dele consta na nota): alimenta a
+  // seção "Dados do Tomador" do relatório. Falha é silenciosa.
+  let tomadorCadastro: { razao_social: string; endereco: string; cep: string; municipio: string; uf: string; situacao: string } | null = null;
+  const cnpjTomadorLimpo = cnpjTomador.replace(/\D/g, '');
+  if (cnpjTomadorLimpo.length === 14 && cnpjTomadorLimpo !== cnpjLimpio) {
+    try {
+      const cadastroTomador = await consultarCnpj(cnpjTomadorLimpo, config.minhaReceitaUrl);
+      if (cadastroTomador.razao_social && !(cadastroTomador.situacao || '').startsWith('Erro')) {
+        tomadorCadastro = {
+          razao_social: cadastroTomador.razao_social,
+          endereco: cadastroTomador.endereco || '',
+          cep: cadastroTomador.cep || '',
+          municipio: cadastroTomador.municipio || '',
+          uf: cadastroTomador.uf || '',
+          situacao: cadastroTomador.situacao || '',
+        };
+      } else {
+        const fallbackTomador = await consultarCnpjFallback(cnpjTomadorLimpo);
+        if (fallbackTomador.razao_social) {
+          tomadorCadastro = {
+            razao_social: fallbackTomador.razao_social,
+            endereco: fallbackTomador.endereco || '',
+            cep: fallbackTomador.cep || '',
+            municipio: fallbackTomador.municipio || '',
+            uf: fallbackTomador.uf || '',
+            situacao: fallbackTomador.situacao || '',
+          };
+        }
+      }
+    } catch (e) {
+      console.error('[Tomador] Falha ao consultar cadastro:', e);
+    }
+  }
+
+  // --- FASE 4: Clasificación fiscal ---
+  await actualizarEtapa('Calculando retenções e tributos...', 60);
+  const lc116Codigo = correlacion.lc116;
+  const clasificacionFiscal = formatearClasificacionParaLlm({
+    lc116Codigo,
+    simplesNacional: empresa.simples_nacional,
+    ciudadServicio: cidade,
+    ufServicio: uf,
+    ciudadPrestador: empresa.municipio,
+    cnpjTomador,
+    valorServicio: valor,
+    cnaeServicio: empresa.cnae_codigo || empresa.cnae,
+    descripcionServicio: `${servico} ${servicoDescricao}`.trim(),
+    prestadorEsMei: empresa.mei,
+  });
+
+  const contexto = {
+    empresa,
+    nfse: {
+      numero: numeroNfse,
+      data_emissao: dataEmissao,
+      cnpj_prestador: cnpjLimpio,
+      cnpj_tomador: cnpjTomador,
+      tomador_cadastro: tomadorCadastro,
+      codigo_servico: codigoServicoNfse,
+      item_lista_lc116: itemListaLc116,
+      descricao_servico: servico,
+      detalhamento_servico: servicoDescricao,
+      valor_bruto: valor,
+      valor_liquido: valorLiquido,
+      iss_retencao_declarada: retencaoIssNfse,
+      simples_nacional_declarado: simplesNacionalNfse,
+      mei_declarado: meiNfse,
+    },
+    origem_dados: origemDados,
+    layout_nota: layoutNacional ? 'nacional' : 'antigo',
+    revisao_humana: 'confirmada',
+    correlacion_formatada: correlacionFormatada,
+    cnae_codigo: empresa.cnae_codigo,
+    cnae_descricao: empresa.cnae_descricao,
+    cnaes_secundarios: empresa.cnaes_secundarios,
+    valor,
+    cidade,
+    uf,
+    busca_formatada: buscaFormatada,
+    referencia_ibpt: ibptFormatado,
+    clasificacion_fiscal: clasificacionFiscal,
+  };
+
+  // Processa em background (não bloqueia a resposta)
+  c.executionCtx.waitUntil(
+    (async () => {
+      try {
+        await actualizarEtapa('Gerando relatório completo...', 80);
+        const relatorio = await generarAnalisis(contexto, config, env.OPENROUTER_API_KEY || '');
+
+        // Normaliza encoding (corrige caracteres corrompidos)
+        const relatorioNormalizado = normalizarEncoding(relatorio);
+
+        // Codifica em Base64 para proteger contra corrupção do Durable Object
+        const relatorioBase64 = codificarBase64(relatorioNormalizado);
+
+        // Guarda em D1
+        if (env.DB) {
+          await salvarAnalise(env.DB, {
+            cnpj: cnpjLimpio,
+            servico,
+            valor,
+            cidade,
+            uf,
+            resultado: relatorioNormalizado,
+          });
+        }
+
+        await doObj.fetch(`https://tarea/${id}/actualizar`, {
+          method: 'POST',
+          body: JSON.stringify({ status: 'concluido', progreso: 100, etapa_actual: 'Análise concluída.', inicio_em: inicioEm, relatorio_completo: relatorioBase64 }),
+        });
+      } catch (e) {
+        await doObj.fetch(`https://tarea/${id}/actualizar`, {
+          method: 'POST',
+          body: JSON.stringify({ status: 'error', error: e instanceof Error ? e.message : 'Erro desconhecido' }),
+        });
+      }
+    })()
+  );
+
+  return c.json({
+    status: 'procesando',
+    resumo: '',
+    dados_extraidos: { task_id: taskId, cnpj: cnpjLimpio, servico, cidade },
+  });
+}
+
+// Análise de NFSe
 app.post('/api/analisar', async (c) => {
   const env = c.env;
   const config = getConfig(env);
@@ -722,8 +969,21 @@ app.post('/api/analisar', async (c) => {
       }
     }
 
-    // Anexo nunca inicia análise diretamente: exige leitura/revisão confirmada pelo usuário.
+    // Anexo: política de revisão por layout e confiança.
+    // - Layout nacional (ambiente NFS-e nacional) + confiança >= Alta (0,7)
+    //   + zero divergências → revisão DISPENSADA: análise inicia direto.
+    // - Layout antigo de prefeitura → revisão OBRIGATÓRIA sempre (sem timer,
+    //   sem auto-confirmação), mesmo com confiança alta.
+    // - Layout nacional com confiança baixa/divergências → revisão obrigatória.
     if (archivo instanceof File && !dadosConfirmados) {
+      const textoLayout = resultadoOcr?.texto_ocr || textoPdfExtraido || '';
+      const layoutNacional = /c[oó]digo\s+de\s+tributa[cç][aã]o\s+nacional|local\s+da\s+presta[cç][aã]o\s*\/\s*sigla\s+uf|\b\d{50}\b|nfs?-?e\s+nacional|receita\s+federal\s+do\s+brasil/i.test(textoLayout);
+      const confiancaAlta = (resultadoOcr?.confianza ?? 0) >= 0.7;
+      const semDivergencias = (resultadoOcr?.campos_divergentes ?? []).length === 0;
+      const politicaRevisao = layoutNacional && confiancaAlta && semDivergencias
+        ? 'dispensada'
+        : 'obrigatoria';
+
       // Cruzamento com o emissor (Geranet): só quando o OCR tem divergências
       // ou confiança baixa. Falha é silenciosa — nunca bloqueia o fluxo.
       let cruzamento: Awaited<ReturnType<typeof cruzarComEmissor>> | null = null;
@@ -748,9 +1008,53 @@ app.post('/api/analisar', async (c) => {
         console.error('[Cruzamento emissor] falhou:', e);
       }
 
+      // Revisão dispensada: valida os mínimos e segue direto para a análise
+      // com confirmação implícita do OCR. Qualquer falha cai no modal.
+      if (politicaRevisao === 'dispensada') {
+        const cnpjDispensa = String(datosExtraidos.cnpj || '').replace(/\D/g, '');
+        const validoDispensa =
+          validarCnpj(cnpjDispensa) &&
+          validarUf(String(datosExtraidos.uf || '')) &&
+          Number(datosExtraidos.valor || 0) > 0 &&
+          String(datosExtraidos.servico || '').trim().length >= 3 &&
+          String(datosExtraidos.cidade || '').trim().length >= 2;
+        if (validoDispensa) {
+          // Confirmação implícita do OCR: monta o payload confirmado e usa o
+          // MESMO fluxo da confirmação humana (processarAnaliseConfirmada).
+          const formDispensa = new FormData();
+          const d = datosExtraidos as Record<string, unknown>;
+          formDispensa.set('cnpj', String(d.cnpj || '').replace(/\D/g, ''));
+          formDispensa.set('servico', String(d.servico || ''));
+          formDispensa.set('valor', String(d.valor ?? ''));
+          formDispensa.set('cidade', String(d.cidade || ''));
+          formDispensa.set('uf', String(d.uf || ''));
+          if (d.cnpj_tomador) formDispensa.set('cnpj_tomador', String(d.cnpj_tomador));
+          if (d.servico_descricao) formDispensa.set('servico_descricao', String(d.servico_descricao));
+          if (d.codigo_servico_nfse) formDispensa.set('codigo_servico_nfse', String(d.codigo_servico_nfse));
+          if (d.item_lista_lc116) formDispensa.set('item_lista_lc116', String(d.item_lista_lc116));
+          if (d.valor_liquido !== undefined && d.valor_liquido !== null) formDispensa.set('valor_liquido', String(d.valor_liquido));
+          if (d.iss_retencao) formDispensa.set('iss_retencao', String(d.iss_retencao));
+          if (d.numero_nfse) formDispensa.set('numero_nfse', String(d.numero_nfse));
+          if (d.data_emissao) formDispensa.set('data_emissao', String(d.data_emissao));
+          if (d.simples_nacional_nfse) formDispensa.set('simples_nacional_nfse', String(d.simples_nacional_nfse));
+          if (d.mei_nfse === true) formDispensa.set('mei_nfse', 'true');
+          if (cruzamento) {
+            formDispensa.set('cruzamento_emissor', JSON.stringify({
+              status: cruzamento.status,
+              mensagem: cruzamento.mensagem || '',
+              sugestoes: cruzamento.sugestoes,
+              divergencias_resolvidas: cruzamento.divergencias_resolvidas,
+            }));
+          }
+          return processarAnaliseConfirmada(c, env, config, formDispensa, archivo, cruzamento, textoLayout, layoutNacional);
+        }
+      }
+
       return c.json({
         status: 'revisao_necessaria',
-        mensagem: 'Confira os dados extraídos no documento original antes de iniciar a análise fiscal.',
+        mensagem: layoutNacional
+          ? 'A leitura automática precisa da sua confirmação antes de iniciar a análise fiscal.'
+          : 'Nota de prefeitura (layout antigo): a análise fiscal só inicia após a sua confirmação dos dados extraídos.',
         dados_extraidos: datosExtraidos,
         confiança_ocr: resultadoOcr?.confianza || 0,
         candidatos_ocr: resultadoOcr?.candidatos || {},
@@ -759,6 +1063,8 @@ app.post('/api/analisar', async (c) => {
         metodo_ocr: resultadoOcr?.metodo || '',
         campos_divergentes: resultadoOcr?.campos_divergentes || [],
         erros_ocr: resultadoOcr?.erros || [],
+        layout: layoutNacional ? 'nacional' : 'antigo',
+        politica_revisao: politicaRevisao,
         cruzamento_emissor: cruzamento ? {
           status: cruzamento.status,
           mensagem: cruzamento.mensagem || '',
@@ -776,231 +1082,21 @@ app.post('/api/analisar', async (c) => {
       });
     }
 
-    if (!cnpj || servico.trim().length < 3 || cidade.trim().length < 2 || !uf || (archivo instanceof File && valor <= 0) || divergenciasCriticas.length > 0) {
-      const problemasOcr = resultadoOcr?.erros.length ? ` Problemas na extração: ${resultadoOcr.erros.join('; ')}.` : '';
-      const camposDivergentes = resultadoOcr?.campos_divergentes.length
-        ? ` Os modelos divergiram em: ${resultadoOcr.campos_divergentes.join(', ')}.`
-        : '';
-      return c.json({
-        status: 'error',
-        error: `Dados insuficientes ou divergentes. Confirme CNPJ do prestador, serviço, valor, cidade e UF da NFSe.${problemasOcr}${camposDivergentes}`,
-        dados_extraidos: datosExtraidos,
-        campos_divergentes: resultadoOcr?.campos_divergentes || [],
-        erros_ocr: resultadoOcr?.erros || [],
-      }, 422);
-    }
-
-    const cnpjLimpio = cnpj.replace(/\D/g, '');
-    if (!validarCnpj(cnpjLimpio)) {
-      return c.json({ status: 'error', error: 'O CNPJ informado/extraído é inválido. Confirme o CNPJ do prestador na NFSe.' }, 422);
-    }
-    if (!validarUf(uf)) {
-      return c.json({ status: 'error', error: `UF inválida: ${uf}. Confirme a UF do município de prestação.` }, 422);
-    }
-
-    // --- FASE 2: Consultas paralelas ---
-    const taskId = generarTaskId();
-    const id = c.env.DB ? `${taskId}` : taskId;
-    const doId = c.env.TAREA_ANALISIS.idFromName(id);
-    const doObj = c.env.TAREA_ANALISIS.get(doId);
-    await doObj.fetch(`https://tarea/${id}/inicializar`, {
-      method: 'POST',
-      body: JSON.stringify({ id: taskId }),
-    });
-
-    const inicioEm = new Date().toISOString();
-    const actualizarEtapa = (etapa: string, progreso: number) =>
-      doObj.fetch(`https://tarea/${id}/actualizar`, {
-        method: 'POST',
-        body: JSON.stringify({ status: 'procesando', progreso, etapa_actual: etapa, inicio_em: inicioEm }),
-      });
-
-    await actualizarEtapa('Consultando Receita Federal...', 20);
-    const empresa = await consultarCnpj(cnpjLimpio, config.minhaReceitaUrl);
-    if (!empresa.razao_social && empresa.situacao && empresa.situacao.startsWith('Erro')) {
-      const fallback = await consultarCnpjFallback(cnpjLimpio);
-      if (fallback.razao_social) {
-        Object.assign(empresa, fallback);
+    // --- Caminho confirmado (humano no modal ou formulário da sidebar) ---
+    // Toda a lógica de validação e execução vive em processarAnaliseConfirmada.
+    let cruzamentoConfirmadoForm: { status: string; mensagem?: string; sugestoes: Array<{ campo: string; confianca: 'forte' | 'fraca' }>; divergencias_resolvidas: string[] } | null = null;
+    try {
+      const cruzamentoForm = form.get('cruzamento_emissor');
+      if (cruzamentoForm) {
+        const parsed = JSON.parse(cruzamentoForm.toString()) as typeof cruzamentoConfirmadoForm;
+        if (parsed && Array.isArray(parsed.sugestoes)) cruzamentoConfirmadoForm = parsed;
       }
+    } catch {
+      // payload inválido: ignora
     }
-    const correlacion = correlacionarPorCnae(empresa.cnae_codigo, `${servico} ${codigoServicoNfse}`.trim());
-    const correlacionFormatada = formatarCorrelacaoParaLlm(correlacion);
-
-    // --- FASE 3: Búsqueda online + referência IBPT (em paralelo) ---
-    await actualizarEtapa('Consultando legislação aplicable...', 40);
-    const cnaeStr = empresa.cnae || servico;
-    const pregunta = `${cnaeStr} ${servico} retenção ISS ${cidade} ${uf} LC 116 legislação`;
-    // Código para consulta IBPT: prioriza o item LC 116 da correlação;
-    // usa o código da NFS-e como alternativa quando a correlação não resolve.
-    const codigoIbpt = correlacion.lc116 || itemListaLc116 || codigoServicoNfse;
-    const [resultadosBusca, resultadoIbpt] = await Promise.all([
-      buscarOnline(pregunta, env),
-      consultarAliquotaServico(cnpjLimpio, codigoIbpt, uf, servico, valor, config, env),
-    ]);
-    const buscaFormatada = formatearBuscaParaLlm(resultadosBusca);
-    const ibptFormatado = formatarIbptParaLlm(resultadoIbpt);
-
-    // Cadastro do tomador (quando o CNPJ dele consta na nota): alimenta a
-    // seção "Dados do Tomador" do relatório. Falha é silenciosa.
-    let tomadorCadastro: { razao_social: string; endereco: string; cep: string; municipio: string; uf: string; situacao: string } | null = null;
-    const cnpjTomadorLimpo = cnpjTomador.replace(/\D/g, '');
-    if (cnpjTomadorLimpo.length === 14 && cnpjTomadorLimpo !== cnpjLimpio) {
-      try {
-        const cadastroTomador = await consultarCnpj(cnpjTomadorLimpo, config.minhaReceitaUrl);
-        if (cadastroTomador.razao_social && !(cadastroTomador.situacao || '').startsWith('Erro')) {
-          tomadorCadastro = {
-            razao_social: cadastroTomador.razao_social,
-            endereco: cadastroTomador.endereco || '',
-            cep: cadastroTomador.cep || '',
-            municipio: cadastroTomador.municipio || '',
-            uf: cadastroTomador.uf || '',
-            situacao: cadastroTomador.situacao || '',
-          };
-        } else {
-          const fallbackTomador = await consultarCnpjFallback(cnpjTomadorLimpo);
-          if (fallbackTomador.razao_social) {
-            tomadorCadastro = {
-              razao_social: fallbackTomador.razao_social,
-              endereco: fallbackTomador.endereco || '',
-              cep: fallbackTomador.cep || '',
-              municipio: fallbackTomador.municipio || '',
-              uf: fallbackTomador.uf || '',
-              situacao: fallbackTomador.situacao || '',
-            };
-          }
-        }
-      } catch (e) {
-        console.error('[Tomador] Falha ao consultar cadastro:', e);
-      }
-    }
-
-    // --- FASE 4: Clasificación fiscal ---
-    await actualizarEtapa('Calculando retenções e tributos...', 60);
-    const lc116Codigo = correlacion.lc116;
-    const clasificacionFiscal = formatearClasificacionParaLlm({
-      lc116Codigo,
-      simplesNacional: empresa.simples_nacional,
-      ciudadServicio: cidade,
-      ufServicio: uf,
-      ciudadPrestador: empresa.municipio,
-      cnpjTomador,
-      valorServicio: valor,
-      cnaeServicio: empresa.cnae_codigo || empresa.cnae,
-      descripcionServicio: `${servico} ${servicoDescricao}`.trim(),
-      // A situação declarada na nota é evidência documental, não status cadastral.
-      // Para regras automáticas de retenção/cota use o dado cadastral consultado;
-      // a declaração da NFSe continua separada no contexto do relatório.
-      prestadorEsMei: empresa.mei,
-    });
-
-    // Dispara o processamento em background
-    // Origem de cada campo da nota: emissor (Geranet) > usuário > OCR.
-    // O LLM usa isso para indicar a origem dos dados no relatório.
-    const origemDados: Record<string, string> = {
-      numero: numeroNfseForm ? 'usuário' : 'OCR',
-      data_emissao: dataEmissaoForm ? 'usuário' : 'OCR',
-      cnpj_prestador: cnpjForm ? 'usuário' : 'OCR',
-      cnpj_tomador: cnpjTomadorForm ? 'usuário' : 'OCR',
-      codigo_servico: codigoServicoForm ? 'usuário' : 'OCR',
-      valor_bruto: valorForm ? 'usuário' : 'OCR',
-      valor_liquido: valorLiquidoForm ? 'usuário' : 'OCR',
-      iss_retencao_declarada: issRetencaoForm ? 'usuário' : 'OCR',
-    };
-    if (cruzamentoConfirmado && cruzamentoConfirmado.sugestoes) {
-      for (const sugestao of cruzamentoConfirmado.sugestoes) {
-        if (sugestao.confianca === 'forte') {
-          const mapa: Record<string, string> = {
-            numero_nfse: 'numero',
-            valor: 'valor_bruto',
-            valor_liquido: 'valor_liquido',
-            data_emissao: 'data_emissao',
-            cnpj_tomador: 'cnpj_tomador',
-            codigo_servico_nfse: 'codigo_servico',
-            iss_retencao: 'iss_retencao_declarada',
-          };
-          const chave = mapa[sugestao.campo];
-          if (chave) origemDados[chave] = 'emissor (Geranet)';
-        }
-      }
-    }
-
-    const contexto = {
-      empresa,
-      nfse: {
-        numero: numeroNfse,
-        data_emissao: dataEmissao,
-        cnpj_prestador: cnpjLimpio,
-        cnpj_tomador: cnpjTomador,
-        tomador_cadastro: tomadorCadastro,
-        codigo_servico: codigoServicoNfse,
-        item_lista_lc116: itemListaLc116,
-        descricao_servico: servico,
-        detalhamento_servico: servicoDescricao,
-        valor_bruto: valor,
-        valor_liquido: valorLiquido,
-        iss_retencao_declarada: retencaoIssNfse,
-        simples_nacional_declarado: simplesNacionalNfse,
-        mei_declarado: meiNfse,
-      },
-      origem_dados: origemDados,
-      correlacion_formatada: correlacionFormatada,
-      cnae_codigo: empresa.cnae_codigo,
-      cnae_descricao: empresa.cnae_descricao,
-      cnaes_secundarios: empresa.cnaes_secundarios,
-      valor,
-      cidade,
-      uf,
-      busca_formatada: buscaFormatada,
-      referencia_ibpt: ibptFormatado,
-      clasificacion_fiscal: clasificacionFiscal,
-      confianza_ocr: resultadoOcr?.confianza,
-      campos_divergentes_ocr: resultadoOcr?.campos_divergentes,
-      erros_ocr: resultadoOcr?.erros,
-    };
-
-    // Processa em background (não bloquea a resposta)
-    c.executionCtx.waitUntil(
-      (async () => {
-        try {
-          await actualizarEtapa('Gerando relatório completo...', 80);
-          const relatorio = await generarAnalisis(contexto, config, env.OPENROUTER_API_KEY || '');
-
-          // Normaliza encoding (corrige caracteres corrompidos)
-          const relatorioNormalizado = normalizarEncoding(relatorio);
-
-          // Codifica em Base64 para proteger contra corrupção do Durable Object
-          const relatorioBase64 = codificarBase64(relatorioNormalizado);
-
-          // Guarda em D1
-          if (env.DB) {
-            await salvarAnalise(env.DB, {
-              cnpj: cnpjLimpio,
-              servico,
-              valor,
-              cidade,
-              uf,
-              resultado: relatorioNormalizado,
-            });
-          }
-
-          await doObj.fetch(`https://tarea/${id}/actualizar`, {
-            method: 'POST',
-            body: JSON.stringify({ status: 'concluido', progreso: 100, etapa_actual: 'Análise concluída.', inicio_em: inicioEm, relatorio_completo: relatorioBase64 }),
-          });
-        } catch (e) {
-          await doObj.fetch(`https://tarea/${id}/actualizar`, {
-            method: 'POST',
-            body: JSON.stringify({ status: 'error', error: e instanceof Error ? e.message : 'Error desconocido' }),
-          });
-        }
-      })()
-    );
-
-    return c.json({
-      status: 'procesando',
-      resumo: '',
-      dados_extraidos: { task_id: taskId, cnpj: cnpjLimpio, servico, cidade },
-    });
+    const textoLayoutConfirmado = resultadoOcr?.texto_ocr || textoPdfExtraido || '';
+    const layoutNacionalConfirmado = /c[oó]digo\s+de\s+tributa[cç][aã]o\s+nacional|local\s+da\s+presta[cç][aã]o\s*\/\s*sigla\s+uf|\b\d{50}\b|nfs?-?e\s+nacional|receita\s+federal\s+do\s+brasil/i.test(textoLayoutConfirmado);
+    return processarAnaliseConfirmada(c, env, config, form, archivo instanceof File ? archivo : null, cruzamentoConfirmadoForm, textoLayoutConfirmado, layoutNacionalConfirmado);
   } catch (e) {
     return c.json({ status: 'error', error: `Error interno: ${e instanceof Error ? e.message : 'desconocido'}` });
   }
