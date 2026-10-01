@@ -349,7 +349,7 @@ export function extrairDadosRotuladosNfse(texto: string): DadosRotuladosNfse {
         );
         const proxima = indiceCodigo >= 0 ? linhasSeguintes[indiceCodigo] : linhas[indice + 1] || '';
         const codigoMatch = proxima.match(/^(\d{2}\.\d{2}(?:\.\d{2})?)(?:\s*[-–:]\s*(.*))?/);
-        if (codigoMatch) {
+        if (codigoMatch && codigoMatch[1] !== undefined) {
           codigosServico.push(codigoMatch[1]);
           const descricaoOficial = codigoMatch[2]?.trim()
             || linhas[indice + 1 + indiceCodigo + 1]
@@ -418,13 +418,18 @@ export function extrairDadosRotuladosNfse(texto: string): DadosRotuladosNfse {
   }
   // Em tabelas, os rótulos e valores podem estar em linhas separadas. Para o
   // valor total da NFS-e, o primeiro valor da linha seguinte corresponde ao total.
+  // Layouts antigos: o valor pode vir com o rótulo na MESMA linha, ou em linhas
+  // mais distantes (tabelas com células separadas por espaços/pipe).
   for (let indice = 0; indice < linhas.length; indice++) {
     const linhaNormalizada = normalizar(linhas[indice]);
     if (!/valor\s+total(?:\s+da\s+(?:nota|nfs?[- ]?e))?\s*(?:\(r\$\))?/.test(linhaNormalizada)) continue;
-    const proxima = linhas.slice(indice + 1, indice + 4).find((linha) => /(?:R\$\s*)\d/.test(linha)) || '';
-    const valores = [...proxima.matchAll(/(?:R\$\s*)?((?:\d{1,3}(?:\.\d{3})+|\d+)(?:,\d{1,2})?)/g)];
-    if (!valores) continue;
+    // Janela maior (5 linhas) e inclui a própria linha (valor na mesma linha do rótulo).
+    const janela = [linhas[indice], ...linhas.slice(indice + 1, indice + 5)].join(' ');
+    const valores = [...janela.matchAll(/(?:R\$\s*)?((?:\d{1,3}(?:\.\d{3})+|\d+)(?:,\d{1,2})?)/g)];
+    if (valores.length === 0) continue;
+    // Prioriza valor com R$ explícito; senão o primeiro número fora do próprio rótulo.
     const valorBruto = valores.find((valor) => /R\$/.test(valor[0])) || valores[0];
+    if (!valorBruto || valorBruto[1] === undefined) continue;
     const primeiroValor = Number(valorBruto[1].replace(/[^\d,.-]/g, '').replace(/\./g, '').replace(',', '.'));
     if (Number.isFinite(primeiroValor) && primeiroValor > 0 && primeiroValor <= 10_000_000) valoresRotulados.push(primeiroValor);
   }
@@ -438,10 +443,12 @@ export function extrairDadosRotuladosNfse(texto: string): DadosRotuladosNfse {
   for (let indice = 0; indice < linhas.length; indice++) {
     const linhaNormalizada = normalizar(linhas[indice]);
     if (/valor\s+liquido\s+da\s+nfs?[- ]?e/.test(linhaNormalizada)) {
-      const proxima = linhas.slice(indice + 1, indice + 4).find((linha) => /(?:R\$\s*)?\d/.test(linha)) || '';
-      const valorMatch = proxima.match(/(?:R\$\s*)((?:\d{1,3}(?:\.\d{3})+|\d+)(?:,\d{1,2})?)/i)
-        || proxima.match(/\b(\d{1,3}(?:\.\d{3})*,\d{2})\b/);
-      if (valorMatch) {
+      // Janela maior para layouts antigos: valor líquido pode estar a algumas
+      // linhas de distância ou na mesma linha do rótulo.
+      const janela = [linhas[indice], ...linhas.slice(indice + 1, indice + 5)].join(' ');
+      const valorMatch = janela.match(/(?:R\$\s*)((?:\d{1,3}(?:\.\d{3})+|\d+)(?:,\d{1,2})?)/i)
+        || janela.match(/\b(\d{1,3}(?:\.\d{3})*,\d{2})\b/);
+      if (valorMatch && valorMatch[1] !== undefined) {
         const valorLiquido = Number(valorMatch[1].replace(/\./g, '').replace(',', '.'));
         if (Number.isFinite(valorLiquido) && valorLiquido >= 0 && valorLiquido <= 10_000_000) dados.valor_liquido = valorLiquido;
       }
@@ -459,7 +466,7 @@ export function extrairDadosRotuladosNfse(texto: string): DadosRotuladosNfse {
     if (/issqn\s*\(r\$\)/.test(linhaNormalizada) && !dados.iss_retencao) {
       const valoresIss = linhas.slice(indice + 1, indice + 3).join(' ');
       const valorIss = valoresIss.match(/(?:R\$\s*)?((?:\d{1,3}(?:\.\d{3})+|\d+)(?:,\d{1,2})?)/);
-      if (valorIss) {
+      if (valorIss && valorIss[1] !== undefined) {
         dados.iss_retencao = Number(valorIss[1].replace(/\./g, '').replace(',', '.')) > 0 ? 'Retido' : 'Não retido';
       }
     }

@@ -413,8 +413,21 @@ export async function extraerDatosNfse(
   // corroborada por pelo menos dois modelos visuais independentes.
   const divergenciasResolvidas = new Set<string>();
   if (textoDocumento) {
-    const { extrairDadosRotuladosNfse } = await import('./validacoes');
-    const rotulados = extrairDadosRotuladosNfse(textoDocumento);
+    // Rede de segurança: qualquer falha do parser de rótulos (layout não
+    // previsto de alguma prefeitura) não derruba a extração — os dados
+    // votados pelos modelos visuais seguem como fonte.
+    let rotulados: {
+      dados: Partial<Record<string, unknown>>;
+      candidatos: Partial<Record<string, string[]>>;
+      erros: string[];
+      correcoes: string[];
+    } = { dados: {}, candidatos: {}, erros: [], correcoes: [] };
+    try {
+      const { extrairDadosRotuladosNfse } = await import('./validacoes');
+      rotulados = extrairDadosRotuladosNfse(textoDocumento) as unknown as typeof rotulados;
+    } catch (e) {
+      console.error('[Parser rótulos] falhou (layout não previsto):', e);
+    }
     if (textoOcrConfiavel) {
       Object.assign(datosVotados, {
         ...(rotulados.dados.cnpj ? { cnpj: rotulados.dados.cnpj } : {}),
